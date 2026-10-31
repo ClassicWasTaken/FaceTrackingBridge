@@ -106,6 +106,9 @@ public partial class MainWindow : Window
         SyncStartupPreferences();
         KittyFace.Source = HologramKittyVisual.CreateHeadIcon();
         KittyOverlay.Attach(this);
+        KittyOverlay.MemoryChanged += (_, _) => RefreshKittyMemorySummary();
+        KittyOverlay.ConfigureMemory(_root);
+        RefreshKittyMemorySummary();
         KittyOverlay.GetSurfaces = GetKittySurfaces;
         KittyOverlay.CanSmackAt = point => FindKittyTarget(point) is not null;
         KittyOverlay.ImpactRequested = (point, strength) => { if (FindKittyTarget(point) is { } target) Motion.PetWobble(target, strength); };

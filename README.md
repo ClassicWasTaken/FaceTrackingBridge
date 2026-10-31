@@ -26,7 +26,7 @@ Using Baballonia Expressions Alpha? Download **Baballonia** in Modules, or choos
 
 In **Settings**, choose whether to start with SteamVR, close when it exits, or **start minimized to system tray**. Clicking **X** keeps tracking running in the tray; double-click the tray icon to reopen, or right-click it to **Quit**.
 
-Click the **kitty face in the bottom-left corner** to meet Relay, an optional holographic robot cat. Relay starts **off every time you open the app**. Pick it up and drag it around, or let it climb onto visible panels and sit on their edges. Its small, local recurrent model guides play, grooming, investigation and rest; a separate controller handles climbing and pickup. Relay is completely silent: cat sounds appear only as little text bubbles. The companion pauses in the tray. [Behavior and research notes](docs/RELAY-BEHAVIOR.md).
+Click the **kitty face in the bottom-left corner** to meet Relay, an optional holographic robot cat. Relay starts **off every time you open the app**. Gently stroke it with your pointer to pet it, click to poke it, or drag its body to pick it up. It also climbs visible panels and perches on their edges. A tiny local **Transformer** guides its behavior using recent context. Its individual temperament, growing bond, preferences and shared memories are saved on your computer and loaded next time. In Settings, **Forget memories** starts that bond fresh. Relay is completely silent: cat sounds appear only as little text bubbles. The companion pauses in the tray. [Behavior, memory and research notes](docs/RELAY-BEHAVIOR.md).
 
 The tracking-connection particles smoothly coast to a stop and dim when the bridge stops, then brighten and resume when it starts.
 

@@ -1,0 +1,597 @@
+{
+  "architecture": "relay-causal-transformer-156k-v1",
+  "seed": 20261101,
+  "config": {
+    "work_dir": null,
+    "episodes": 8000,
+    "validation_episodes": 1200,
+    "epochs": 90,
+    "batch_size": 96,
+    "threads": 4,
+    "resume": null
+  },
+  "trained_parameters": 155848,
+  "fixed_position_values": 3072,
+  "numeric_weight_bytes": 635680,
+  "input_count": 22,
+  "behavior_count": 35,
+  "attention_count": 5,
+  "context_steps": 32,
+  "blocks": 2,
+  "model_width": 96,
+  "heads": 6,
+  "feed_forward_width": 192,
+  "selected_epoch": 90,
+  "checkpoint_selection": "lowest behavior KL + 0.6 * attention KL on progress-validation seed only",
+  "layer_norm_epsilon": 1e-05,
+  "gelu": "tanh approximation",
+  "torch_version": "2.15.0+cpu",
+  "numpy_version": "2.5.4",
+  "device": "CPU",
+  "training_seconds": 218.111473500001,
+  "final_audit_seconds": 0.292190500000288,
+  "training_episodes": 8000,
+  "training_valid_timesteps": 176985,
+  "train_scenarios": [
+    "quiet_home",
+    "prey_play",
+    "repeated_cursor",
+    "gentle_contact",
+    "rapid_pestering",
+    "sudden_novelty",
+    "gradual_novelty",
+    "play_then_groom",
+    "settle_nap_wake",
+    "surface_patrol",
+    "solitary_play",
+    "social_choice",
+    "recall_play",
+    "recall_contact",
+    "recall_startle",
+    "recall_novelty",
+    "mixed_play_social",
+    "mixed_novel_rest",
+    "spaced_pet_then_space",
+    "poke_then_recovery",
+    "calm_handling_then_release",
+    "cat_led_social_choice"
+  ],
+  "progress_validation_seed": 20262101,
+  "heldout_seed": 20266101,
+  "unseen_mix_seed": 20267101,
+  "heldout": {
+    "episodes": 1200,
+    "valid_timesteps": 26166,
+    "behavior": {
+      "top1_agreement": 0.9740502942750133,
+      "mean_kl_nats": 0.0008549375925213099,
+      "mean_total_variation": 0.011626939289271832
+    },
+    "attention": {
+      "top1_agreement": 0.9946113276771382,
+      "mean_kl_nats": 0.00013654076610691845,
+      "mean_total_variation": 0.005098242778331041
+    },
+    "by_scenario": {
+      "quiet_home": {
+        "timesteps": 999,
+        "behavior_agreement": 0.965965965965966,
+        "attention_agreement": 0.994994994994995
+      },
+      "prey_play": {
+        "timesteps": 1499,
+        "behavior_agreement": 0.9499666444296198,
+        "attention_agreement": 0.9873248832555037
+      },
+      "repeated_cursor": {
+        "timesteps": 1117,
+        "behavior_agreement": 0.9623992837958818,
+        "attention_agreement": 0.9964189794091316
+      },
+      "gentle_contact": {
+        "timesteps": 1015,
+        "behavior_agreement": 0.9960591133004926,
+        "attention_agreement": 0.9990147783251232
+      },
+      "rapid_pestering": {
+        "timesteps": 1155,
+        "behavior_agreement": 0.9965367965367965,
+        "attention_agreement": 0.9688311688311688
+      },
+      "sudden_novelty": {
+        "timesteps": 1588,
+        "behavior_agreement": 0.9615869017632241,
+        "attention_agreement": 0.9911838790931989
+      },
+      "gradual_novelty": {
+        "timesteps": 989,
+        "behavior_agreement": 0.967644084934277,
+        "attention_agreement": 1.0
+      },
+      "play_then_groom": {
+        "timesteps": 1338,
+        "behavior_agreement": 0.9245142002989537,
+        "attention_agreement": 0.9745889387144993
+      },
+      "settle_nap_wake": {
+        "timesteps": 835,
+        "behavior_agreement": 0.9820359281437125,
+        "attention_agreement": 0.9964071856287425
+      },
+      "surface_patrol": {
+        "timesteps": 1145,
+        "behavior_agreement": 0.948471615720524,
+        "attention_agreement": 1.0
+      },
+      "solitary_play": {
+        "timesteps": 1053,
+        "behavior_agreement": 1.0,
+        "attention_agreement": 1.0
+      },
+      "social_choice": {
+        "timesteps": 1243,
+        "behavior_agreement": 0.9943684633950121,
+        "attention_agreement": 1.0
+      },
+      "recall_play": {
+        "timesteps": 1256,
+        "behavior_agreement": 0.9904458598726115,
+        "attention_agreement": 1.0
+      },
+      "recall_contact": {
+        "timesteps": 1276,
+        "behavior_agreement": 1.0,
+        "attention_agreement": 1.0
+      },
+      "recall_startle": {
+        "timesteps": 1210,
+        "behavior_agreement": 0.9512396694214876,
+        "attention_agreement": 1.0
+      },
+      "recall_novelty": {
+        "timesteps": 1082,
+        "behavior_agreement": 0.955637707948244,
+        "attention_agreement": 1.0
+      },
+      "mixed_play_social": {
+        "timesteps": 1172,
+        "behavior_agreement": 0.9778156996587031,
+        "attention_agreement": 0.9863481228668942
+      },
+      "mixed_novel_rest": {
+        "timesteps": 1177,
+        "behavior_agreement": 0.9660152931180969,
+        "attention_agreement": 0.9974511469838573
+      },
+      "spaced_pet_then_space": {
+        "timesteps": 1254,
+        "behavior_agreement": 0.9952153110047847,
+        "attention_agreement": 0.9992025518341308
+      },
+      "poke_then_recovery": {
+        "timesteps": 1367,
+        "behavior_agreement": 0.9824433065106072,
+        "attention_agreement": 0.9970738844184345
+      },
+      "calm_handling_then_release": {
+        "timesteps": 1187,
+        "behavior_agreement": 0.9941027801179444,
+        "attention_agreement": 0.9991575400168492
+      },
+      "cat_led_social_choice": {
+        "timesteps": 1209,
+        "behavior_agreement": 0.9809760132340778,
+        "attention_agreement": 1.0
+      }
+    }
+  },
+  "unseen_ordered_mixtures": {
+    "episodes": 600,
+    "valid_timesteps": 13384,
+    "behavior": {
+      "top1_agreement": 0.852062163777645,
+      "mean_kl_nats": 0.03345734253525734,
+      "mean_total_variation": 0.06141854077577591
+    },
+    "attention": {
+      "top1_agreement": 0.9506126718469815,
+      "mean_kl_nats": 0.0051312996074557304,
+      "mean_total_variation": 0.026623249053955078
+    },
+    "by_scenario": {
+      "heldout_social_then_novel": {
+        "timesteps": 3327,
+        "behavior_agreement": 0.9038172527802826,
+        "attention_agreement": 0.996092575894199
+      },
+      "heldout_play_then_startle": {
+        "timesteps": 3292,
+        "behavior_agreement": 0.8259416767922235,
+        "attention_agreement": 0.956865127582017
+      },
+      "heldout_handling_then_play": {
+        "timesteps": 3654,
+        "behavior_agreement": 0.7996715927750411,
+        "attention_agreement": 0.89792008757526
+      },
+      "heldout_poke_then_pet": {
+        "timesteps": 3111,
+        "behavior_agreement": 0.8858887817422051,
+        "attention_agreement": 0.9572484731597557
+      }
+    }
+  },
+  "temporal_validation": {
+    "counterfactuals": {
+      "play_vs_quiet": {
+        "identical_final_observation": true,
+        "behavior_total_variation": 0.0787271186709404,
+        "attention_total_variation": 0.09567879885435104,
+        "left_top_behavior": "SlowBlink",
+        "right_top_behavior": "SlowBlink",
+        "left_top_attention": "Environment",
+        "right_top_attention": "Environment"
+      },
+      "gentle_vs_pester": {
+        "identical_final_observation": true,
+        "behavior_total_variation": 0.224873885512352,
+        "attention_total_variation": 0.07716269791126251,
+        "left_top_behavior": "SlowBlink",
+        "right_top_behavior": "SlowBlink",
+        "left_top_attention": "Environment",
+        "right_top_attention": "Environment"
+      },
+      "novel_vs_quiet": {
+        "identical_final_observation": true,
+        "behavior_total_variation": 0.041454728692770004,
+        "attention_total_variation": 0.1802302896976471,
+        "left_top_behavior": "SlowBlink",
+        "right_top_behavior": "SlowBlink",
+        "left_top_attention": "Environment",
+        "right_top_attention": "Environment"
+      },
+      "novel_vs_repeated": {
+        "identical_final_observation": true,
+        "behavior_total_variation": 0.06738147139549255,
+        "attention_total_variation": 0.19456860423088074,
+        "left_top_behavior": "SlowBlink",
+        "right_top_behavior": "SlowBlink",
+        "left_top_attention": "Environment",
+        "right_top_attention": "Environment"
+      },
+      "pester_vs_quiet": {
+        "identical_final_observation": true,
+        "behavior_total_variation": 0.02437567338347435,
+        "attention_total_variation": 0.08769054710865021,
+        "left_top_behavior": "SlowBlink",
+        "right_top_behavior": "SlowBlink",
+        "left_top_attention": "Environment",
+        "right_top_attention": "Environment"
+      }
+    },
+    "history_ablations": {
+      "quiet": {
+        "repeat_final_behavior_tv": 0.0,
+        "repeat_final_attention_tv": 0.0,
+        "shuffle_prefix_behavior_tv": 0.0,
+        "shuffle_prefix_attention_tv": 0.0
+      },
+      "play": {
+        "repeat_final_behavior_tv": 0.0787271186709404,
+        "repeat_final_attention_tv": 0.09567879885435104,
+        "shuffle_prefix_behavior_tv": 0.1402740627527237,
+        "shuffle_prefix_attention_tv": 0.1408475637435913
+      },
+      "gentle": {
+        "repeat_final_behavior_tv": 0.21245186030864716,
+        "repeat_final_attention_tv": 0.011908509768545628,
+        "shuffle_prefix_behavior_tv": 0.18620847165584564,
+        "shuffle_prefix_attention_tv": 0.00702033331617713
+      },
+      "pester": {
+        "repeat_final_behavior_tv": 0.02437567338347435,
+        "repeat_final_attention_tv": 0.08769054710865021,
+        "shuffle_prefix_behavior_tv": 0.10311742126941681,
+        "shuffle_prefix_attention_tv": 0.11398865282535553
+      },
+      "novel": {
+        "repeat_final_behavior_tv": 0.041454728692770004,
+        "repeat_final_attention_tv": 0.1802302896976471,
+        "shuffle_prefix_behavior_tv": 0.1546546220779419,
+        "shuffle_prefix_attention_tv": 0.46222373843193054
+      },
+      "repeated": {
+        "repeat_final_behavior_tv": 0.04619806259870529,
+        "repeat_final_attention_tv": 0.023456541821360588,
+        "shuffle_prefix_behavior_tv": 0.051105797290802,
+        "shuffle_prefix_attention_tv": 0.04545605555176735
+      },
+      "gradual": {
+        "repeat_final_behavior_tv": 0.02394706755876541,
+        "repeat_final_attention_tv": 0.06261132657527924,
+        "shuffle_prefix_behavior_tv": 0.051410552114248276,
+        "shuffle_prefix_attention_tv": 0.12487748265266418
+      }
+    }
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 2.9599776580220176,
+      "behavior_agreement": 0.8312304621294867,
+      "attention_agreement": 0.9676095062332869,
+      "behavior_kl": 0.03098408132791519,
+      "attention_kl": 0.008182150311768055,
+      "elapsed_seconds": 2.8895591000000422
+    },
+    {
+      "epoch": 10,
+      "loss": 2.7554344620023454,
+      "behavior_agreement": 0.8997024594177244,
+      "attention_agreement": 0.9879853866144401,
+      "behavior_kl": 0.0076408712193369865,
+      "attention_kl": 0.0008622694294899702,
+      "elapsed_seconds": 27.311017100000754
+    },
+    {
+      "epoch": 20,
+      "loss": 2.7511877105349587,
+      "behavior_agreement": 0.9251252306881097,
+      "attention_agreement": 0.9906218221535912,
+      "behavior_kl": 0.004611979704350233,
+      "attention_kl": 0.0005679110181517899,
+      "elapsed_seconds": 54.76909180000075
+    },
+    {
+      "epoch": 30,
+      "loss": 2.7492790619532266,
+      "behavior_agreement": 0.9537870513351663,
+      "attention_agreement": 0.9891152875597906,
+      "behavior_kl": 0.00279424199834466,
+      "attention_kl": 0.000694184098392725,
+      "elapsed_seconds": 81.02215129999968
+    },
+    {
+      "epoch": 40,
+      "loss": 2.747347525187901,
+      "behavior_agreement": 0.9491921208240744,
+      "attention_agreement": 0.9933335844224322,
+      "behavior_kl": 0.0021495711989700794,
+      "attention_kl": 0.0003142811474390328,
+      "elapsed_seconds": 107.81017749999955
+    },
+    {
+      "epoch": 50,
+      "loss": 2.7465474633943465,
+      "behavior_agreement": 0.9668562389363866,
+      "attention_agreement": 0.994953109110768,
+      "behavior_kl": 0.0015004482120275497,
+      "attention_kl": 0.00021692356676794589,
+      "elapsed_seconds": 134.8170902999991
+    },
+    {
+      "epoch": 60,
+      "loss": 2.7470114628473916,
+      "behavior_agreement": 0.9680238032465821,
+      "attention_agreement": 0.9954050694889082,
+      "behavior_kl": 0.0012479833094403148,
+      "attention_kl": 0.00018929880752693862,
+      "elapsed_seconds": 160.15745759999845
+    },
+    {
+      "epoch": 70,
+      "loss": 2.7467633343878246,
+      "behavior_agreement": 0.9705849120560431,
+      "attention_agreement": 0.9945764754623178,
+      "behavior_kl": 0.001075119012966752,
+      "attention_kl": 0.00017780759662855417,
+      "elapsed_seconds": 179.68782339999962
+    },
+    {
+      "epoch": 80,
+      "loss": 2.7476254332633245,
+      "behavior_agreement": 0.9775149711875258,
+      "attention_agreement": 0.9962713268803435,
+      "behavior_kl": 0.0008926814189180732,
+      "attention_kl": 0.00012944646005053073,
+      "elapsed_seconds": 198.57831100000112
+    },
+    {
+      "epoch": 90,
+      "loss": 2.7464591293107894,
+      "behavior_agreement": 0.9746525554593047,
+      "attention_agreement": 0.9954427328537532,
+      "behavior_kl": 0.0008467219886370003,
+      "attention_kl": 0.00013987878628540784,
+      "elapsed_seconds": 217.7852415999987
+    }
+  ],
+  "limitations": [
+    "Original synthetic teacher labels only; no real-cat dataset or measured feline cognition.",
+    "Agreement measures imitation of this teacher, not intelligence, consciousness, or animal fidelity.",
+    "Physical eligibility, welfare-style interaction constraints, routines and rendering remain ordinary application code.",
+    "Context is bounded to32 observations; longer needs are supplied by existing explicit need/memory inputs.",
+    "No user recordings, cloud service, pretrained model, audio output, or language generation."
+  ],
+  "model_sha256": "d2478269e90a62b0e5d503cb9abec0bb7d0545bc48f165cd4bff4303b37dbd22",
+  "comparison_with_19208_parameter_baseline": {
+    "baseline_trained_parameters": 19208,
+    "selected_trained_parameters": 155848,
+    "same_curriculum_and_episode_count": true,
+    "same_audit_episodes": true,
+    "heldout_seed": 20266101,
+    "unseen_seed": 20267101,
+    "baseline_heldout": {
+      "episodes": 1200,
+      "valid_timesteps": 26166,
+      "behavior": {
+        "top1_agreement": 0.9126729343422763,
+        "mean_kl_nats": 0.006184827070683241,
+        "mean_total_variation": 0.03355707973241806
+      },
+      "attention": {
+        "top1_agreement": 0.9901780937093939,
+        "mean_kl_nats": 0.0006026516784913838,
+        "mean_total_variation": 0.01078095193952322
+      },
+      "by_scenario": {
+        "quiet_home": {
+          "timesteps": 999,
+          "behavior_agreement": 0.8958958958958959,
+          "attention_agreement": 0.973973973973974
+        },
+        "prey_play": {
+          "timesteps": 1499,
+          "behavior_agreement": 0.8545697131420947,
+          "attention_agreement": 0.9773182121414277
+        },
+        "repeated_cursor": {
+          "timesteps": 1117,
+          "behavior_agreement": 0.8683974932855864,
+          "attention_agreement": 0.9946284691136974
+        },
+        "gentle_contact": {
+          "timesteps": 1015,
+          "behavior_agreement": 0.9576354679802955,
+          "attention_agreement": 0.9980295566502463
+        },
+        "rapid_pestering": {
+          "timesteps": 1155,
+          "behavior_agreement": 0.9861471861471861,
+          "attention_agreement": 0.9844155844155844
+        },
+        "sudden_novelty": {
+          "timesteps": 1588,
+          "behavior_agreement": 0.8356423173803527,
+          "attention_agreement": 0.9924433249370277
+        },
+        "gradual_novelty": {
+          "timesteps": 989,
+          "behavior_agreement": 0.6956521739130435,
+          "attention_agreement": 1.0
+        },
+        "play_then_groom": {
+          "timesteps": 1338,
+          "behavior_agreement": 0.773542600896861,
+          "attention_agreement": 0.9446935724962631
+        },
+        "settle_nap_wake": {
+          "timesteps": 835,
+          "behavior_agreement": 0.888622754491018,
+          "attention_agreement": 0.98562874251497
+        },
+        "surface_patrol": {
+          "timesteps": 1145,
+          "behavior_agreement": 0.6681222707423581,
+          "attention_agreement": 1.0
+        },
+        "solitary_play": {
+          "timesteps": 1053,
+          "behavior_agreement": 1.0,
+          "attention_agreement": 1.0
+        },
+        "social_choice": {
+          "timesteps": 1243,
+          "behavior_agreement": 0.9879324215607401,
+          "attention_agreement": 1.0
+        },
+        "recall_play": {
+          "timesteps": 1256,
+          "behavior_agreement": 0.9570063694267515,
+          "attention_agreement": 1.0
+        },
+        "recall_contact": {
+          "timesteps": 1276,
+          "behavior_agreement": 1.0,
+          "attention_agreement": 1.0
+        },
+        "recall_startle": {
+          "timesteps": 1210,
+          "behavior_agreement": 0.9479338842975207,
+          "attention_agreement": 1.0
+        },
+        "recall_novelty": {
+          "timesteps": 1082,
+          "behavior_agreement": 0.9981515711645101,
+          "attention_agreement": 0.9907578558225508
+        },
+        "mixed_play_social": {
+          "timesteps": 1172,
+          "behavior_agreement": 0.9513651877133106,
+          "attention_agreement": 0.976962457337884
+        },
+        "mixed_novel_rest": {
+          "timesteps": 1177,
+          "behavior_agreement": 0.9218351741716228,
+          "attention_agreement": 0.9855564995751912
+        },
+        "spaced_pet_then_space": {
+          "timesteps": 1254,
+          "behavior_agreement": 0.988835725677831,
+          "attention_agreement": 0.9976076555023924
+        },
+        "poke_then_recovery": {
+          "timesteps": 1367,
+          "behavior_agreement": 0.9400146305779078,
+          "attention_agreement": 0.9890270665691295
+        },
+        "calm_handling_then_release": {
+          "timesteps": 1187,
+          "behavior_agreement": 0.983150800336984,
+          "attention_agreement": 0.9991575400168492
+        },
+        "cat_led_social_choice": {
+          "timesteps": 1209,
+          "behavior_agreement": 0.9834574028122415,
+          "attention_agreement": 1.0
+        }
+      }
+    },
+    "baseline_unseen_ordered_mixtures": {
+      "episodes": 600,
+      "valid_timesteps": 13384,
+      "behavior": {
+        "top1_agreement": 0.7999103407053197,
+        "mean_kl_nats": 0.09906724840402603,
+        "mean_total_variation": 0.0920509397983551
+      },
+      "attention": {
+        "top1_agreement": 0.909593544530783,
+        "mean_kl_nats": 0.01953527145087719,
+        "mean_total_variation": 0.04894787073135376
+      },
+      "by_scenario": {
+        "heldout_social_then_novel": {
+          "timesteps": 3327,
+          "behavior_agreement": 0.7920048091373609,
+          "attention_agreement": 0.9924857228734596
+        },
+        "heldout_play_then_startle": {
+          "timesteps": 3292,
+          "behavior_agreement": 0.7858444714459295,
+          "attention_agreement": 0.9170716889428918
+        },
+        "heldout_handling_then_play": {
+          "timesteps": 3654,
+          "behavior_agreement": 0.8628899835796388,
+          "attention_agreement": 0.7887246852764094
+        },
+        "heldout_poke_then_pet": {
+          "timesteps": 3111,
+          "behavior_agreement": 0.7492767598842816,
+          "attention_agreement": 0.9549983927997429
+        }
+      }
+    },
+    "baseline_model_sha256": "dbc8a10bbdb6928e29fb27da78dfd796d8231e099234ee73ff4e8897a5192763",
+    "limitations": "Comparison concerns imitation of the same synthetic teacher. The larger model uses progress-validation checkpoint selection; the small baseline is its previously frozen90-epoch checkpoint. It does not measure real-cat intelligence or tracking performance.",
+    "heldout_agreement_delta_percentage_points": {
+      "behavior": 6.137735993273708,
+      "attention": 0.443323396774431
+    },
+    "unseen_agreement_delta_percentage_points": {
+      "behavior": 5.215182307232524,
+      "attention": 4.10191273161985
+    }
+  }
+}

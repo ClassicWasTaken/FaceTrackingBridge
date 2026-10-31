@@ -68,6 +68,12 @@ internal static class Program
         using var themes = new SystemThemeManager(app);
         try
         {
+            if (args.Contains("--kitty-memory-only", StringComparer.Ordinal))
+            {
+                RunKittyMemoryTests(root, themes, renderDirectory, suppliedZip);
+                Console.WriteLine($"Appearance kitty memory: {passed} passed, {failed} failed.");
+                return failed == 0 ? 0 : 1;
+            }
             var emptyProfile = Path.Combine(root, "empty-profile");
             window = CreateWindow(emptyProfile);
             themes.AttachWindow(window);
@@ -627,6 +633,8 @@ internal static class Program
                 }
                 finally { CloseWindow(); }
             });
+
+            RunKittyMemoryTests(root, themes, renderDirectory, suppliedZip);
 
             Test("the text-only kitty ignores legacy sound preferences without losing saved settings", () =>
             {
@@ -3149,6 +3157,287 @@ internal static class Program
             WindowStartupLocation = WindowStartupLocation.Manual, Left = -20000, Top = -20000
         };
         return result;
+    }
+
+    private static void RunKittyMemoryTests(string root, SystemThemeManager themes, string? renderDirectory, string? moduleZip)
+    {
+        CloseWindow();
+        Test("kitty memory loads read-only while off and restores identity, bond and context before its first decision", () =>
+        {
+            var profile = Path.Combine(root, "kitty-memory-restore");
+            new AppSettings { AutoStart = false, OutputPort = 19460, ReceivePort = 19461 }.Save(profile);
+            if (moduleZip is not null) new ModuleStore(profile).Prepare(moduleZip);
+            var protectedData = KittyProtectedData(profile);
+            var store = new KittyMemoryStore(profile);
+            var context = Enumerable.Range(0, 22 * 5).Select(index => index * 397 % 65536).ToArray();
+            var fixture = new KittyMemory(Trust: .83, Affection: .72, Preferences: Enumerable.Repeat(1.17, 35).ToArray(),
+                Context: context, Sessions: 7, GentleContacts: 14, IdentitySeed: 424242, Playfulness: .78,
+                Sociability: .81, Caution: .32, Bond: .43, PositiveContactSeconds: 120,
+                CoreMemories: [new(KittyCoreMemoryKind.FirstGentlePet, .6, 3, DateTimeOffset.UtcNow.AddDays(-2), DateTimeOffset.UtcNow)]);
+            Check(store.Save(fixture), "Could not create the bounded memory fixture.");
+            var before = File.ReadAllBytes(store.FilePath);
+            try
+            {
+                window = CreateWindow(profile); themes.AttachWindow(window); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "remembering kitty window opened");
+                protectedData = KittyProtectedData(profile); // Normal first-run module-state migration precedes any kitty interaction.
+                var overlay = Named<HologramKittyOverlay>(window, "KittyOverlay");
+                Check(!overlay.IsActive && !overlay.IsAnimating && File.ReadAllBytes(store.FilePath).SequenceEqual(before),
+                    "Opening the app enabled the kitty or rewrote its save while disabled.");
+                PumpFor(TimeSpan.FromMilliseconds(180));
+                Check(File.ReadAllBytes(store.FilePath).SequenceEqual(before), "A disabled companion ran a memory checkpoint.");
+                Named<Button>(window, "KittyToggle").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var mind = Field<KittyMind>(overlay, "_mind");
+                var loaded = mind.CaptureMemory();
+                Check(mind.InferenceCount == 0 && loaded.Context!.SequenceEqual(context),
+                    "The first decision ran before restoring the saved Transformer observations.");
+                Check(loaded.IdentitySeed == 424242 && loaded.Playfulness == .78 && loaded.Sociability == .81
+                    && loaded.Caution == .32 && loaded.Trust == .83 && loaded.Bond == .43,
+                    "The user's familiar kitty traits were not restored before the first decision.");
+                Check(loaded.CoreMemories is { Length: 1 } && loaded.CoreMemories[0].Kind == KittyCoreMemoryKind.FirstGentlePet
+                    && loaded.Preferences!.All(value => value == 1.17), "Core memories or learned preferences were lost on activation.");
+                PumpUntil(() => overlay.IsActive && overlay.IsVisible, "remembered kitty explicitly enabled");
+                Named<RadioButton>(window, "PreferencesNav").IsChecked = true;
+                Named<Border>(window, "KittyMemoryCard").BringIntoView();
+                PumpUntil(() => Named<StackPanel>(window, "PreferencesPage").Opacity >= .999, "memory settings page settled");
+                Check(Named<TextBlock>(window, "KittyMemorySummary").Text.Contains("First gentle pet")
+                    && Named<TextBlock>(window, "KittyMemorySummary").Text.Contains("Bond:"), "Settings hid the remembered shared moment.");
+                foreach (var dark in new[] { false, true })
+                {
+                    themes.ApplyTheme(dark); Pump(); window.UpdateLayout();
+                    var summary = Named<TextBlock>(window, "KittyMemorySummary");
+                    var card = Named<Border>(window, "KittyMemoryCard");
+                    Check(Contrast(ColorOf(summary.Foreground), ColorOf(card.Background)) >= 4.5, "Memory status has insufficient theme contrast.");
+                    var cardPosition = card.TranslatePoint(default, overlay);
+                    var previewPosition = new Point(cardPosition.X + card.ActualWidth - 170, cardPosition.Y + 55);
+                    typeof(HologramKittyOverlay).GetField("_position", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(overlay, previewPosition);
+                    typeof(HologramKittyOverlay).GetField("_target", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(overlay, previewPosition);
+                    Method(overlay, "PlaceCat").Invoke(overlay, null);
+                    SavePreview(window, renderDirectory, dark ? "kitty-memory-dark.png" : "kitty-memory-light.png");
+                }
+                window.Hide();
+                var saved = store.Load();
+                Check(saved.IdentitySeed == loaded.IdentitySeed && saved.CoreMemories is { Length: 1 }
+                    && saved.Context is { Length: > 0 } && saved.Sessions == 8, "Pausing did not checkpoint the remembered individual and recent experience.");
+                Check(KittyProtectedData(profile) == protectedData, "Kitty memory changed connection settings or the module library.");
+                var paused = File.ReadAllBytes(store.FilePath);
+                CloseWindow();
+                Check(File.ReadAllBytes(store.FilePath).SequenceEqual(paused), "Closing an already checkpointed paused kitty rewrote its memory.");
+                window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "remembered profile reopened");
+                overlay = Named<HologramKittyOverlay>(window, "KittyOverlay");
+                Check(!overlay.IsActive && File.ReadAllBytes(store.FilePath).SequenceEqual(paused), "Reopening a remembered profile activated or modified it.");
+                Named<Button>(window, "KittyToggle").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(Field<KittyMind>(overlay, "_mind").CaptureMemory().Context!.SequenceEqual(saved.Context!),
+                    "A second launch failed to restore the most recent complete context.");
+            }
+            finally { CloseWindow(); }
+        });
+
+        Test("real kitty pointer samples distinguish gentle strokes, poke bursts and calm or canceled pickups", () =>
+        {
+            var profile = Path.Combine(root, "kitty-memory-gestures");
+            new AppSettings { AutoStart = false }.Save(profile);
+            var protectedData = KittyProtectedData(profile);
+            try
+            {
+                window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "gesture memory profile opened");
+                protectedData = KittyProtectedData(profile);
+                EnableKitty(window);
+                var overlay = Named<HologramKittyOverlay>(window, "KittyOverlay");
+                var mind = Field<KittyMind>(overlay, "_mind");
+                var oldTrust = mind.Trust;
+                StrokeKitty(overlay, 84);
+                var positive = mind.CaptureMemory();
+                Check(positive.PositiveContactSeconds >= 1.5 && positive.Trust > oldTrust
+                    && positive.CoreMemories!.Any(core => core.Kind == KittyCoreMemoryKind.FirstGentlePet),
+                    "Slow pointer strokes did not form a positive contact memory through the actual gesture path.");
+                var capturedBefore = Mouse.Captured;
+                var body = KittyBodyPoint(overlay);
+                var clock = Field<double>(mind, "_timeSeconds");
+                for (var index = 0; index < 50; index++) Method(overlay, "Pester").Invoke(overlay, [body]);
+                Check(Field<double>(mind, "_timeSeconds") == clock, "A click burst fabricated simulation time.");
+                for (var index = 0; index < 14; index++) { mind.Tick(.1, default); Method(overlay, "Pester").Invoke(overlay, [body]); }
+                Check(mind.Irritation > .5 && mind.Trust < positive.Trust, "Pokes were treated as affectionate strokes.");
+                var contacts = mind.CaptureMemory().PositiveContactSeconds;
+                StrokeKitty(overlay, 12, buttonPressed: true);
+                Check(mind.CaptureMemory().PositiveContactSeconds == contacts, "A pressed-button drag became gentle hover petting.");
+                var buttonClicks = 0;
+                var realButton = Named<Button>(window, "ImportButton"); realButton.Click += (_, _) => buttonClicks++;
+                body = KittyBodyPoint(overlay);
+                Check(overlay.BeginPickup(body), "The cat rejected a calm pickup.");
+                overlay.MovePickup(body + new Vector(5, 0));
+                PumpFor(TimeSpan.FromMilliseconds(850));
+                overlay.EndPickup(body + new Vector(5, 0));
+                Check(mind.CaptureMemory().CoreMemories!.Any(core => core.Kind == KittyCoreMemoryKind.CalmPickup), "A calm held pickup could never become a shared memory.");
+                var calm = mind.CaptureMemory().CoreMemories!.First(core => core.Kind == KittyCoreMemoryKind.CalmPickup);
+                body = KittyBodyPoint(overlay); Check(overlay.BeginPickup(body), "The cat rejected a canceled pickup.");
+                overlay.MovePickup(body + new Vector(8, 0)); overlay.CancelPickup();
+                Check(!Field<bool>(mind, "_pickupActive") && mind.CaptureMemory().CoreMemories!.First(core => core.Kind == KittyCoreMemoryKind.CalmPickup) == calm,
+                    "Canceling a pickup left a stuck mind flag or awarded another positive memory.");
+                Check(buttonClicks == 0 && ReferenceEquals(Mouse.Captured, capturedBefore), "Kitty interactions activated an app control or captured the real system mouse.");
+                window.Hide();
+                var saved = new KittyMemoryStore(profile).Load();
+                Check(saved.GentleContacts > 0 && saved.Pokes >= 14 && saved.CoreMemories!.Length >= 2, "Pausing lost aggregate gestures or core moments.");
+                Check(KittyProtectedData(profile) == protectedData, "Kitty gestures changed connection settings or modules.");
+            }
+            finally { CloseWindow(); }
+        });
+
+        Test("forgetting an active kitty clears identity and context then resumes learning without touching app settings", () =>
+        {
+            var profile = Path.Combine(root, "kitty-memory-forget");
+            new AppSettings { AutoStart = false, OutputPort = 19462, ReceivePort = 19463 }.Save(profile);
+            try
+            {
+                window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "forget profile opened");
+                var protectedData = KittyProtectedData(profile);
+                EnableKitty(window);
+                var overlay = Named<HologramKittyOverlay>(window, "KittyOverlay");
+                StrokeKitty(overlay, 84);
+                Method(overlay, "SaveMemory").Invoke(overlay, null);
+                var oldMind = Field<KittyMind>(overlay, "_mind"); var oldIdentity = oldMind.CaptureMemory().IdentitySeed;
+                Named<Button>(window, "ForgetKittyMemoryButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var mind = Field<KittyMind>(overlay, "_mind"); var cleared = mind.CaptureMemory();
+                Check(overlay.IsActive && !ReferenceEquals(mind, oldMind) && cleared.IdentitySeed != oldIdentity
+                    && cleared.Bond == 0 && cleared.Context is { Length: 0 } && cleared.CoreMemories!.Length == 0,
+                    "Forget left the old identity, bond, core moments or context alive.");
+                Check(!File.Exists(Path.Combine(profile, "kitty-memory.json")), "Forget did not remove the previous save immediately.");
+                StrokeKitty(overlay, 84);
+                window.Hide();
+                var saved = new KittyMemoryStore(profile).Load();
+                Check(saved.IdentitySeed == mind.CaptureMemory().IdentitySeed && saved.Sessions == 1 && saved.GentleContacts > 0
+                    && saved.Context is { Length: > 0 } && saved.CoreMemories!.Any(core => core.Kind == KittyCoreMemoryKind.FirstGentlePet),
+                    "An active reset disabled future learning or revived the forgotten kitty.");
+                Check(KittyProtectedData(profile) == protectedData, "Forgetting kitty memories changed connection settings or the module library.");
+            }
+            finally { CloseWindow(); }
+        });
+
+        Test("corrupt or locked kitty memories never block the app and a failed forget is reported honestly", () =>
+        {
+            foreach (var kind in new[] { "corrupt", "locked" })
+            {
+                var profile = Path.Combine(root, "kitty-memory-" + kind);
+                new AppSettings { AutoStart = false }.Save(profile);
+                var store = new KittyMemoryStore(profile);
+                if (kind == "corrupt") File.WriteAllText(store.FilePath, "{broken memory");
+                else Check(store.Save(new KittyMemory(IdentitySeed: 7171)), "The locked memory fixture could not save.");
+                var before = File.ReadAllBytes(store.FilePath);
+                FileStream? locked = kind == "locked" ? new FileStream(store.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read) : null;
+                try
+                {
+                    window = CreateWindow(profile); window.Show();
+                    PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "damaged memory app still opened");
+                    Check(!Named<HologramKittyOverlay>(window, "KittyOverlay").IsActive
+                        && Named<Button>(window, "ModuleImportButton").IsEnabled, "A memory error blocked normal tracking-module controls.");
+                    EnableKitty(window);
+                    StrokeKitty(Named<HologramKittyOverlay>(window, "KittyOverlay"), 18);
+                    window.Hide();
+                    if (locked is not null)
+                    {
+                        Check(File.ReadAllBytes(store.FilePath).SequenceEqual(before), "A locked memory was overwritten.");
+                        window.Show();
+                        Named<Button>(window, "ForgetKittyMemoryButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        Check(Named<TextBlock>(window, "GlobalNoticeText").Text.Contains("could not be cleared", StringComparison.OrdinalIgnoreCase),
+                            "The app reported successful forgetting after the locked file refused deletion.");
+                    }
+                    else Check(store.Load().IdentitySeed != 0, "A new healthy session could not replace corrupt memory.");
+                }
+                finally { locked?.Dispose(); CloseWindow(); }
+            }
+        });
+
+        Test("kitty recovers a last-good bond read-only and keeps future profiles recoverable until explicitly forgotten", () =>
+        {
+            var profile = Path.Combine(root, "kitty-memory-backup"); new AppSettings { AutoStart = false }.Save(profile);
+            var store = new KittyMemoryStore(profile);
+            var personal = new KittyMemory(IdentitySeed: 88991, Bond: .7, Sessions: 4,
+                Context: Enumerable.Repeat(32000, 22 * 3).ToArray(),
+                CoreMemories: [new(KittyCoreMemoryKind.FirstGentlePet, .6, 2)]);
+            Check(store.Save(personal) && store.Save(personal with { Trust = .8 }), "The backup fixture could not save its previous bond.");
+            const string future = "{\"Schema\":99,\"FutureBond\":\"keep this recoverable\"}";
+            File.WriteAllText(store.FilePath, future);
+            var backup = File.ReadAllBytes(store.BackupPath);
+            try
+            {
+                window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "future-schema profile opened using its last-good bond");
+                var overlay = Named<HologramKittyOverlay>(window, "KittyOverlay");
+                Check(!overlay.IsActive && File.ReadAllText(store.FilePath) == future
+                    && File.ReadAllBytes(store.BackupPath).SequenceEqual(backup), "Opening while off repaired or discarded files without user activation.");
+                Named<Button>(window, "KittyToggle").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var restored = Field<KittyMind>(overlay, "_mind").CaptureMemory();
+                Check(restored.IdentitySeed == 88991 && restored.Bond == .7 && restored.CoreMemories is { Length: 1 }
+                    && restored.Context is { Length: 66 }, "Backup recovery replaced the owner's familiar kitty with a fresh individual.");
+                window.Hide();
+                Check(File.ReadAllText(store.UnreadablePath) == future && store.Load().IdentitySeed == 88991,
+                    "Activation silently discarded an unknown future profile instead of preserving it.");
+                window.Show();
+                Named<Button>(window, "ForgetKittyMemoryButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(!File.Exists(store.FilePath) && !File.Exists(store.BackupPath) && !File.Exists(store.UnreadablePath),
+                    "Reset left a backup or unknown profile capable of resurrecting forgotten memories.");
+                Check(Field<KittyMind>(overlay, "_mind").CaptureMemory().CoreMemories!.Length == 0,
+                    "Reset did not clear the recovered core memory from the current session.");
+            }
+            finally { CloseWindow(); }
+        });
+
+        Test("reduced-motion kitty thought ticks keep input responsive and stop completely when hidden", () =>
+        {
+            var profile = Path.Combine(root, "kitty-memory-quiet-clock"); new AppSettings { AutoStart = false }.Save(profile);
+            try
+            {
+                window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "quiet clock profile opened");
+                EnableKitty(window); var overlay = Named<HologramKittyOverlay>(window, "KittyOverlay");
+                var mind = Field<KittyMind>(overlay, "_mind");
+                var rendering = typeof(HologramKittyOverlay).GetField("_rendering", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                var timestamp = typeof(HologramKittyOverlay).GetField("_quietMindTimestamp", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                var originalRendering = (bool)rendering.GetValue(overlay)!;
+                rendering.SetValue(overlay, false);
+                try
+                {
+                    var before = Field<double>(mind, "_timeSeconds");
+                    for (var index = 0; index < 4; index++)
+                    {
+                        timestamp.SetValue(overlay, Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency - .13);
+                        Method(overlay, "AdvanceQuietMind").Invoke(overlay, null);
+                    }
+                    Check(Field<double>(mind, "_timeSeconds") > before + .45, "Reduced-motion mode stopped the behavior clock.");
+                    var count = mind.InferenceCount; window.Hide();
+                    var hiddenTime = Field<double>(mind, "_timeSeconds");
+                    timestamp.SetValue(overlay, Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency - .5);
+                    Method(overlay, "AdvanceQuietMind").Invoke(overlay, null);
+                    Check(Field<double>(mind, "_timeSeconds") == hiddenTime && mind.InferenceCount == count,
+                        "A hidden reduced-motion kitty kept thinking or collecting observations.");
+                }
+                finally { rendering.SetValue(overlay, originalRendering); }
+            }
+            finally { CloseWindow(); }
+        });
+    }
+
+    private static string KittyProtectedData(string profile) => string.Join("|", Directory.EnumerateFiles(profile, "*", SearchOption.AllDirectories)
+        .Where(path => Path.GetFileName(path).StartsWith("settings.json", StringComparison.OrdinalIgnoreCase)
+            || Path.GetRelativePath(profile, path).StartsWith("modules" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        .Order(StringComparer.Ordinal).Select(path => Path.GetRelativePath(profile, path) + ":" + HashFile(path)));
+
+    private static void StrokeKitty(HologramKittyOverlay overlay, int samples, bool buttonPressed = false)
+    {
+        var mind = Field<KittyMind>(overlay, "_mind");
+        var point = KittyBodyPoint(overlay);
+        var now = Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
+        Method(overlay, "ProcessPointerSample").Invoke(overlay, [point, now, buttonPressed]);
+        for (var index = 0; index < samples; index++)
+        {
+            mind.Tick(.1, new KittyStimulus(UserPresence: 1));
+            point = KittyBodyPoint(overlay) + new Vector(index % 2 == 0 ? 8 : -8, 0);
+            now += .1;
+            Method(overlay, "ProcessPointerSample").Invoke(overlay, [point, now, buttonPressed]);
+        }
     }
 
     private static void RenderParticlesAt(ParticleField particles, TimeSpan timestamp)

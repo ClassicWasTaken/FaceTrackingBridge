@@ -1,0 +1,4 @@
+# Development only. The Windows app ships neither Python nor PyTorch.
+# CPU wheel index: https://download.pytorch.org/whl/cpu
+numpy==2.5.4
+torch==2.15.0+cpu

@@ -1,0 +1,43 @@
+FACE TRACKING BRIDGE 1.1.1 LOCAL PREVIEW - RELAY VALIDATION
+Validated on Windows x64, 31 October 2026. Not published to GitHub.
+
+- Genuine CPU PyTorch training: 8,000 original synthetic episodes, 176,985
+  valid decision frames, 90 epochs. No downloaded pretrained weights or copied
+  text/video corpus. Research informs the curriculum; the model imitates an
+  original design teacher. Exact reproducible metrics and independent audit
+  seeds are recorded in docs/RELAY-TRAINING.json.
+- Two causal attention blocks, width 96, six heads, feed-forward 192, context 32,
+  22 observation features and 35 behavior/five attention outputs. All 155,848
+  learned parameters were trained. Numeric data totals 635,680 bytes including
+  fixed positional encoding. Inference requires no Python, GPU or ML runtime.
+- 2,735 policy and controller checks passed. These include 12 Python/C# golden
+  sequences, true causal masking, context order/dependence/expiry, same-present
+  history counterfactuals, packed context restore, bounded nonfinite handling,
+  individual temperament, pet/poke limits, shared memories, bonding and routines.
+- Maximum Python/C# probability difference:3.404e-7. Full 32-observation
+  inference averaged 1.000 ms with p95 1.396 ms on the development Ryzen 7800X3D;
+  zero allocated bytes over 1,000 warmed calls. This is a model microbenchmark,
+  not a guarantee for all hardware or end-to-end VR frame times.
+- 116 local storage/gesture checks passed: atomic writes, 16 KB bounds,
+  corruption/last-good recovery, future-schema preservation, independent
+  profiles, readonly initial load, stale-context expiry, and complete reset.
+- 67 full WPF/interface checks passed with all module fixtures. Six new groups
+  exercise actual window startup with memories while kitty remains off,
+  first-decision restore, gentle-input classification, poke/drag separation,
+  calm pickup, active forget/relearning, corrupted/locked storage, reduced-motion
+  clock behavior and safe pause/close. Existing module/tray/notice/theme cases pass.
+- Existing silent-caption and panel/pickup suites passed 9,732 and 4,096 checks.
+- Nine sending checks passed: nominal 90 Hz, bounded jitter, unchanged-value
+  refresh, concurrency, rebind, destination updates, cancellation and discovery.
+- License/copyright receipts, private-path exclusions and separate-module
+  distribution checks passed. No external module or developer symbols bundled.
+
+Tests use temporary profiles, synthetic inputs and controlled loopback services.
+They do not change the installed app, real kitty memories, personal modules,
+Windows preferences or live VRChat. The kitty stays silent, offline and off
+at each launch. Model weights remain fixed during use; growth changes saved
+personal state and preferences. This is a software pet, not a biological brain.
+
+Installer upgrade/removal: 30 checks passed from public 1.1.0 to this 1.1.1
+preview, using an isolated application identity and fake SteamVR registration.
+Details are recorded in installer/TESTED-INSTALLER.txt.

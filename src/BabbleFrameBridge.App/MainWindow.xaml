@@ -146,6 +146,12 @@
        <TextBlock Text="Closing the window with X keeps tracking running in the system tray. Double-click the tray icon to reopen, or right-click it for Open and Quit. Start minimized applies on the next launch." Foreground="{DynamicResource Muted}" FontSize="11" TextWrapping="Wrap"/>
        <Button Content="Quit app" Style="{StaticResource QuietButton}" HorizontalAlignment="Left" Margin="0,24,0,0" Click="Quit_Click" AutomationProperties.Name="Quit Face Tracking Bridge"/>
       </StackPanel></Border>
+      <Border x:Name="KittyMemoryCard" Tag="KittyPanel" Style="{StaticResource Card}" Padding="28" Margin="0,18,0,0"><StackPanel>
+       <TextBlock Text="Relay's memory." FontSize="20" FontWeight="Bold"/>
+       <TextBlock Text="Relay remembers your bond, shared moments, and recent experiences on this computer. It stays off until you enable it. Gentle strokes pet it, clicks poke it, and dragging picks it up." Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,8,0,16" TextWrapping="Wrap"/>
+       <TextBlock x:Name="KittyMemorySummary" Foreground="{DynamicResource AccentInk}" FontSize="11" TextWrapping="Wrap" AutomationProperties.Name="Relay memory status"/>
+       <Button x:Name="ForgetKittyMemoryButton" Content="Forget memories" Style="{StaticResource QuietButton}" HorizontalAlignment="Left" Margin="0,17,0,0" Click="ForgetKittyMemory_Click" AutomationProperties.Name="Forget Relay's memories" ToolTip="Reset only Relay's learned preferences and recent context on this computer."/>
+      </StackPanel></Border>
      </StackPanel>
      <Grid x:Name="ActivityPage" Visibility="Collapsed"><Border Tag="KittyPanel" Style="{StaticResource Card}" Padding="24"><StackPanel><Grid Margin="0,0,0,18"><TextBlock Text="What’s happening behind the scenes." FontSize="20" FontWeight="Bold"/><Button Content="Open log folder  ↗" Style="{StaticResource LinkButton}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,40,0,0" Click="Logs_Click"/></Grid><TextBox x:Name="LogBox" MinHeight="400" MaxHeight="520" Height="450" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" BorderThickness="0" Background="{DynamicResource LogBackground}" Padding="14" AutomationProperties.Name="Activity log"/></StackPanel></Border></Grid>
     </Grid>

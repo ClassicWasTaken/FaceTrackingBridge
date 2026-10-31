@@ -13,7 +13,7 @@ public enum KittyAction
 public enum KittyAttention { Cursor, Environment, Self, Rest, Memory }
 public enum KittyRoutine { None, Hunt, Settle, Recovery, Grooming, Explore, Play }
 
-/// <summary>Normalized app-local senses. Nothing is recorded or sent elsewhere.</summary>
+/// <summary>Normalized local senses; only bounded quantized context can be saved, with no pointer coordinates or network transmission.</summary>
 public readonly record struct KittyStimulus(double CursorNear = 0, double CursorMotion = 0,
     double PanelNear = 0, double Novelty = 0, double UserPresence = 0);
 
@@ -24,22 +24,58 @@ public readonly record struct KittyObservation(double Energy, double Sleepiness,
     double PlayMemory = 0, double RestMemory = 0, double ContactMemory = 0, double Completion = 0);
 
 /// <summary>
-/// Original trained temporal policy: 22 inputs, 24 recurrent memory units, two
-/// dense tanh layers (32 and 24), and separate 35-behavior / 5-attention heads.
-/// All 3,720 weights were trained on synthetic episodes, including recurrence.
-/// This simulates cat attention and behavior; it is not conscious thought or
-/// a language model. No cloud, download, recordings or inference runtime.
-/// Reproduce with tools/train_kitty_policy.py (NumPy is development-only).
+/// Original trained causal Transformer: 22 observation features, a rolling
+/// 32-token context, two pre-normalized six-head attention blocks of width96,
+/// and separate 35-behavior /5-attention heads. The 155,848 trained float32
+/// parameters use no cloud, downloads, raw event recordings, language model, or runtime
+/// dependency. This is a small behavior simulation, not conscious thought.
+/// Reproduce with tools/train_kitty_policy.py (development dependencies only).
 /// </summary>
 public sealed class KittyBrain
 {
-    public const int ActionCount = 35, AttentionCount = 5, InputCount = 22, RecurrentUnits = 24, ParameterCount = 3720;
-    private readonly double[] _memory = new double[RecurrentUnits];
+    public const int ActionCount = 35, AttentionCount = 5, InputCount = 22;
+    public const int ContextLength = 32, ModelWidth = 96, HeadCount = 6, FeedForwardWidth = 192, LayerCount = 2;
+    public const int ParameterCount = 155848;
+    private readonly float[] _history = new float[ContextLength * InputCount];
     private readonly double[] _attention = new double[AttentionCount];
-    internal ReadOnlySpan<double> RecurrentState => _memory;
+    private readonly KittyTransformer _transformer = new();
+    private int _historyCount;
+    public int HistoryCount => _historyCount;
+    internal ReadOnlySpan<float> SequenceHistory => _history.AsSpan(0, _historyCount * InputCount);
     public ReadOnlySpan<double> AttentionProbabilities => _attention;
-    public double MemoryActivity => Math.Sqrt(_memory.Sum(value => value*value)/RecurrentUnits);
-    public void ResetMemory() { Array.Clear(_memory); Array.Clear(_attention); }
+    // Compatibility diagnostic: RMS of normalized input context, not an
+    // invented recurrent state or a measure of animal intelligence.
+    public double MemoryActivity
+    {
+        get
+        {
+            if (_historyCount == 0) return 0;
+            double sum = 0;
+            foreach (var value in SequenceHistory) sum += value * value;
+            return Math.Sqrt(sum / (_historyCount * InputCount));
+        }
+    }
+    public void ResetHistory()
+    { Array.Clear(_history); Array.Clear(_attention); _historyCount = 0; _transformer.Reset(); }
+    public void ResetMemory() => ResetHistory();
+
+    /// <summary>Quantized sensory context only; no cursor coordinates or event log.</summary>
+    public int[] ExportContext()
+    {
+        var result = new int[_historyCount * InputCount];
+        for (var index = 0; index < result.Length; index++)
+            result[index] = Math.Clamp((int)Math.Round((_history[index] + 1d) * .5 * 65535), 0, 65535);
+        return result;
+    }
+
+    public void RestoreContext(int[]? context)
+    {
+        ResetHistory();
+        if (context is null || context.Length == 0 || context.Length > ContextLength * InputCount
+            || context.Length % InputCount != 0 || context.Any(value => value is < 0 or > 65535)) return;
+        for (var index = 0; index < context.Length; index++) _history[index] = (float)(context[index] / 65535d * 2 - 1);
+        _historyCount = context.Length / InputCount;
+    }
 
     public double[] Predict(KittyObservation observation)
     {
@@ -51,62 +87,38 @@ public sealed class KittyBrain
     public void Predict(KittyObservation o, Span<double> probabilities)
     {
         if (probabilities.Length < ActionCount) throw new ArgumentException("The policy needs 35 output slots.", nameof(probabilities));
+        if (_historyCount == ContextLength)
+        {
+            _history.AsSpan(InputCount).CopyTo(_history);
+            _historyCount--;
+        }
+        var token = _history.AsSpan(_historyCount * InputCount, InputCount);
         Span<double> input = stackalloc double[] {
             o.Energy,o.Sleepiness,o.Irritation,o.Stimulation,o.CursorNear,o.CursorMotion,o.ClickPressure,
             o.Idle,o.PanelNear,o.Affection,o.ActionAge,o.RoamDrive,o.Curiosity,o.Trust,o.Habituation,
             o.Novelty,o.SocialNeed,o.Startle,o.PlayMemory,o.RestMemory,o.ContactMemory,o.Completion };
-        for (var i=0;i<input.Length;i++) input[i]=Unit(input[i])*2-1;
-        Span<double> next = stackalloc double[RecurrentUnits];
-        for (var j=0;j<RecurrentUnits;j++)
-        {
-            var value=KittyModel.RecurrentBias[j];
-            for (var i=0;i<InputCount;i++) value+=input[i]*KittyModel.InputWeights[i*RecurrentUnits+j];
-            for (var i=0;i<RecurrentUnits;i++) value+=_memory[i]*KittyModel.RecurrentWeights[i*RecurrentUnits+j];
-            next[j]=Math.Tanh(value);
-        }
-        next.CopyTo(_memory);
-        Span<double> dense = stackalloc double[32];
-        Layer(next,dense,KittyModel.DenseWeights,KittyModel.DenseBias);
-        Span<double> deep = stackalloc double[24];
-        Layer(dense,deep,KittyModel.DeepWeights,KittyModel.DeepBias);
-        Softmax(deep,probabilities[..ActionCount],KittyModel.OutputWeights,KittyModel.OutputBias);
-        Softmax(deep,_attention,KittyModel.AttentionWeights,KittyModel.AttentionBias);
-    }
-
-    private static void Layer(ReadOnlySpan<double> input, Span<double> output, double[] weights, double[] bias)
-    {
-        for (var j=0;j<output.Length;j++)
-        {
-            var value=bias[j];
-            for (var i=0;i<input.Length;i++) value+=input[i]*weights[i*output.Length+j];
-            output[j]=Math.Tanh(value);
-        }
-    }
-    private static void Softmax(ReadOnlySpan<double> input, Span<double> output, double[] weights, double[] bias)
-    {
-        var largest=double.NegativeInfinity;
-        for (var j=0;j<output.Length;j++)
-        {
-            var value=bias[j];
-            for (var i=0;i<input.Length;i++) value+=input[i]*weights[i*output.Length+j];
-            output[j]=value; largest=Math.Max(largest,value);
-        }
-        var sum=0d;
-        for(var j=0;j<output.Length;j++) sum+=output[j]=Math.Exp(output[j]-largest);
-        for(var j=0;j<output.Length;j++) output[j]/=sum;
+        for (var i = 0; i < input.Length; i++) token[i] = (float)(Unit(input[i]) * 2 - 1);
+        _historyCount++;
+        _transformer.Evaluate(SequenceHistory, _historyCount, probabilities[..ActionCount], _attention);
     }
     internal static double Unit(double value) => double.IsFinite(value) ? Math.Clamp(value,0,1) : 0;
 }
 
 /// <summary>
 /// Needs, short-term episodic traces, preferences, learned attention and finite
-/// action sequences surround the recurrent policy. Eligibility and cooldowns
+/// action sequences surround the Transformer policy. Eligibility and cooldowns
 /// are physical/UX constraints, not claims of animal cognition or sentience.
 /// </summary>
 public sealed class KittyMind
 {
     private readonly KittyBrain _brain = new();
-    private readonly Random _random;
+    private Random _random;
+    private int _identitySeed;
+    private readonly List<KittyCoreMemory> _coreMemories = new();
+    private readonly double[] _coreReinforcedAt = Enumerable.Repeat(double.NegativeInfinity, 5).ToArray();
+    private double _timeSeconds, _positiveContactSeconds, _sharedPlaySeconds, _comfortContactSeconds;
+    private double _lastGentleAt = double.NegativeInfinity, _lastPokeAt = double.NegativeInfinity, _pickupAt;
+    private bool _needsComfort, _pickupActive;
     private readonly double[] _cooldowns = new double[KittyBrain.ActionCount];
     private readonly double[] _policy = new double[KittyBrain.ActionCount];
     private readonly double[] _preferences = new double[KittyBrain.ActionCount];
@@ -132,7 +144,16 @@ public sealed class KittyMind
     public double Habituation { get; private set; }
     public double SocialNeed { get; private set; } = .4;
     public double Frustration { get; private set; }
-    public double Willingness => KittyBrain.Unit(Energy*.55+Trust*.3+(1-Irritation)*.25-Frustration*.25-Sleepiness*.2);
+    public double Playfulness { get; private set; }
+    public double Sociability { get; private set; }
+    public double Caution { get; private set; }
+    public double Bond { get; private set; }
+    public int CoreMemoryCount => _coreMemories.Count;
+    public double PositiveContactSeconds => _positiveContactSeconds;
+    public string TemperamentSummary => (Playfulness > .65 ? "playful" : Playfulness < .4 ? "mellow" : "curious")
+        + ", " + (Sociability > .65 ? "sociable" : Sociability < .4 ? "independent" : "friendly")
+        + ", " + (Caution > .65 ? "cautious" : Caution < .4 ? "bold" : "observant");
+    public double Willingness => KittyBrain.Unit(Energy*.5+Trust*.3+(1-Irritation)*.25+Bond*.08-Frustration*.25-Sleepiness*.2);
     public KittyRoutine Routine { get; private set; }
     public int RoutineStage => Routine==KittyRoutine.None ? 0 : _stage+1;
     public int RoutineLength => _episode.Length;
@@ -176,17 +197,27 @@ public sealed class KittyMind
 
     public KittyMind(int? seed=null)
     {
-        _random=new Random(seed ?? Random.Shared.Next());
+        _identitySeed = seed is 0 ? int.MinValue : seed ?? Random.Shared.Next(1, int.MaxValue);
+        _random=new Random(_identitySeed);
         Curiosity=Range(.52,.72); Trust=Range(.58,.76); SocialNeed=Range(.3,.5);
         for(var i=0;i<_preferences.Length;i++) _preferences[i]=Range(.86,1.16);
+        Playfulness = Range(.3, .9); Sociability = Range(.3, .9); Caution = Range(.3, .9);
     }
     public KittyObservation Observation => new(Energy,Sleepiness,Irritation,Stimulation,_stimulus.CursorNear,
         _stimulus.CursorMotion,_clickPressure,Math.Min(_idleSeconds/45,1),_stimulus.PanelNear,Affection,
-        Math.Min(ActionAge/Math.Max(.1,ActionDuration),1),_roamDrive,Curiosity,Trust,Habituation,_novelty,
-        SocialNeed,_startle,_playMemory,_restMemory,_contactMemory,_completion);
+        Math.Min(ActionAge/Math.Max(.1,ActionDuration),1),KittyBrain.Unit(_roamDrive * (.7 + Playfulness * .6)),
+        KittyBrain.Unit(Curiosity + (Playfulness-.5)*.15), KittyBrain.Unit(Trust + Bond*.05), Habituation,_novelty,
+        KittyBrain.Unit(SocialNeed * (.7 + Sociability*.6)), KittyBrain.Unit(_startle * (.7 + Caution*.6)),
+        Math.Max(_playMemory, CoreStrength(KittyCoreMemoryKind.SharedPlay)*.12),
+        Math.Max(_restMemory, CoreStrength(KittyCoreMemoryKind.CalmPickup)*.1),
+        Math.Max(_contactMemory, Bond*.15),_completion);
 
-    public void Pester()
+    public void Pester() => Poke();
+
+    public void Poke()
     {
+        if (_timeSeconds - _lastPokeAt < .06) return;
+        _lastPokeAt = _timeSeconds;
         _clickPressure=KittyBrain.Unit(_clickPressure+.19);
         var gentle=_clickPressure<.4;
         Stimulation=KittyBrain.Unit(Stimulation+.11+.07*_clickPressure);
@@ -194,14 +225,124 @@ public sealed class KittyMind
         Trust=KittyBrain.Unit(Trust+(gentle ? .009 : -.018));
         Affection=KittyBrain.Unit(Affection+(gentle ? .025 : -.02));
         SocialNeed=KittyBrain.Unit(SocialNeed-.12);
-        _contactMemory=1; _idleSeconds=0; _reconsider=true; _modelReady=false;
+        _contactMemory=1; _idleSeconds=0; _reconsider=true;
         if(!gentle) _startle=Math.Max(_startle,_clickPressure*.7);
+        if (!gentle) _needsComfort = true;
+    }
+
+    /// <summary>A completed gentle stroke; intensity is local and never recorded.</summary>
+    public void Pet(double intensity = .5) => OnGentleContact(.25, intensity);
+
+    public void OnGentleContact(double elapsedSeconds, double intensity = .5)
+    {
+        var strength = KittyBrain.Unit(intensity);
+        if (strength == 0 || !double.IsFinite(elapsedSeconds) || elapsedSeconds <= 0) return;
+        // Only elapsed active simulation time can build a relationship. Repeated
+        // callbacks or clicks in one frame cannot manufacture contact memories.
+        var available = double.IsNegativeInfinity(_lastGentleAt) ? .25 : Math.Max(0, _timeSeconds - _lastGentleAt);
+        var seconds = Math.Min(.5, Math.Min(elapsedSeconds, available));
+        if (seconds <= 0) return;
+        _lastGentleAt = _timeSeconds;
+        var amount = seconds * strength;
+        _clickPressure *= .65;
+        Irritation = KittyBrain.Unit(Irritation - .07 * amount);
+        Trust = KittyBrain.Unit(Trust + .012 * amount);
+        Affection = KittyBrain.Unit(Affection + .02 * amount);
+        SocialNeed = KittyBrain.Unit(SocialNeed - .05 * amount);
+        Stimulation = KittyBrain.Unit(Stimulation + .008 * amount);
+        _positiveContactSeconds = Math.Min(1_000_000_000, _positiveContactSeconds + amount);
+        Bond = KittyBrain.Unit(Bond + amount * .0008);
+        Prefer(KittyAction.Rub, amount * .0008); Prefer(KittyAction.SlowBlink, amount * .0006);
+        if (_positiveContactSeconds >= 1.5) Remember(KittyCoreMemoryKind.FirstGentlePet, .3);
+        if (_needsComfort)
+        {
+            _comfortContactSeconds += amount;
+            if (_comfortContactSeconds >= 2 && Irritation < .4)
+            { Remember(KittyCoreMemoryKind.ComfortAfterStartle, .35); _needsComfort = false; _comfortContactSeconds = 0; }
+        }
+        _contactMemory = 1; _idleSeconds = 0; _reconsider = true;
+    }
+
+    public void OnPickup()
+    { if (!_pickupActive) { _pickupActive = true; _pickupAt = _timeSeconds; } }
+
+    public void EndPickup(double calmness = .5)
+    {
+        if (!_pickupActive) return;
+        _pickupActive = false;
+        if (KittyBrain.Unit(calmness) < .6 || _timeSeconds - _pickupAt < .6) return;
+        Remember(KittyCoreMemoryKind.CalmPickup, .3);
+        Trust = KittyBrain.Unit(Trust + .006); Affection = KittyBrain.Unit(Affection + .004);
+        _contactMemory = 1; Prefer(KittyAction.Loaf, .002);
+    }
+
+    private double CoreStrength(KittyCoreMemoryKind kind) => _coreMemories.FirstOrDefault(memory => memory.Kind == kind)?.Strength ?? 0;
+    private void Prefer(KittyAction action, double amount) => _preferences[(int)action] = Math.Clamp(_preferences[(int)action] + amount, .5, 1.5);
+    private void Remember(KittyCoreMemoryKind kind, double initialStrength)
+    {
+        var index = _coreMemories.FindIndex(memory => memory.Kind == kind);
+        if (_timeSeconds - _coreReinforcedAt[(int)kind] < 30) return;
+        _coreReinforcedAt[(int)kind] = _timeSeconds;
+        var now = DateTimeOffset.UtcNow;
+        if (index < 0)
+        {
+            if (_coreMemories.Count >= 16) return;
+            _coreMemories.Add(new(kind, initialStrength, 1, now, now));
+            Bond = KittyBrain.Unit(Bond + .008);
+        }
+        else
+        {
+            var memory = _coreMemories[index];
+            _coreMemories[index] = memory with { Strength = Math.Min(1, memory.Strength + .025),
+                Reinforcements = Math.Min(1_000_000, memory.Reinforcements + 1), LastUtc = now };
+            Bond = KittyBrain.Unit(Bond + .001);
+        }
+    }
+
+    public KittyMemory CaptureMemory() => new()
+    {
+        Affection = Affection, Trust = Trust, Habituation = Habituation, SocialNeed = SocialNeed,
+        PlayMemory = _playMemory, RestMemory = _restMemory, ContactMemory = _contactMemory,
+        Preferences = (double[])_preferences.Clone(), Context = _brain.ExportContext(), IdentitySeed = _identitySeed,
+        Playfulness = Playfulness, Sociability = Sociability, Caution = Caution, Bond = Bond,
+        PositiveContactSeconds = _positiveContactSeconds, CoreMemories = _coreMemories.ToArray()
+    };
+
+    public void RestoreMemory(KittyMemory memory)
+    {
+        ArgumentNullException.ThrowIfNull(memory);
+        static double Finite(double value, double fallback) => double.IsFinite(value) ? Math.Clamp(value, 0, 1) : fallback;
+        Affection = Finite(memory.Affection, .55); Trust = Finite(memory.Trust, .65);
+        Habituation = Finite(memory.Habituation, 0); SocialNeed = Finite(memory.SocialNeed, .4);
+        _playMemory = Finite(memory.PlayMemory, 0); _restMemory = Finite(memory.RestMemory, 0);
+        _contactMemory = Finite(memory.ContactMemory, 0);
+        if (memory.IdentitySeed != 0)
+        {
+            _identitySeed = memory.IdentitySeed; _random = new Random(_identitySeed);
+            Playfulness = Finite(memory.Playfulness, .6); Sociability = Finite(memory.Sociability, .6); Caution = Finite(memory.Caution, .5);
+        }
+        Bond = Finite(memory.Bond, 0);
+        _positiveContactSeconds = double.IsFinite(memory.PositiveContactSeconds) ? Math.Clamp(memory.PositiveContactSeconds, 0, 1_000_000_000) : 0;
+        _coreMemories.Clear(); Array.Fill(_coreReinforcedAt, double.NegativeInfinity);
+        foreach (var memoryItem in (memory.CoreMemories ?? []).Where(item => item is not null && Enum.IsDefined(item.Kind))
+            .DistinctBy(item => item.Kind).Take(16))
+        {
+            _coreMemories.Add(memoryItem with { Strength = Finite(memoryItem.Strength, .3), Reinforcements = Math.Clamp(memoryItem.Reinforcements, 1, 1_000_000) });
+            _coreReinforcedAt[(int)memoryItem.Kind] = _timeSeconds;
+        }
+        if (memory.Preferences is { Length: KittyBrain.ActionCount } preferences)
+            for (var index = 0; index < _preferences.Length; index++)
+                _preferences[index] = double.IsFinite(preferences[index]) ? Math.Clamp(preferences[index], .5, 1.5) : 1;
+        _brain.RestoreContext(memory.Context); _modelReady = false; _policyClock = 0;
+        if (memory.Sessions > 0 && memory.SavedAtUtc is { } saved && DateTimeOffset.UtcNow - saved > TimeSpan.FromMinutes(10)
+            && (_positiveContactSeconds > 0 || _coreMemories.Count > 0)) Remember(KittyCoreMemoryKind.Reunion, .25);
     }
 
     public void Tick(double deltaSeconds, KittyStimulus stimulus)
     {
         if(!double.IsFinite(deltaSeconds) || deltaSeconds<0) return;
         var dt=Math.Min(deltaSeconds,.5);
+        _timeSeconds += dt;
         var next=new KittyStimulus(KittyBrain.Unit(stimulus.CursorNear),KittyBrain.Unit(stimulus.CursorMotion),
             KittyBrain.Unit(stimulus.PanelNear),KittyBrain.Unit(stimulus.Novelty),KittyBrain.Unit(stimulus.UserPresence));
         var change=Math.Abs(next.CursorNear-_stimulus.CursorNear)+Math.Abs(next.CursorMotion-_stimulus.CursorMotion);
@@ -220,6 +361,15 @@ public sealed class KittyMind
         _idleSeconds=wave>.12 || _clickPressure>.08 ? 0 : _idleSeconds+dt;
         var moving=Action is KittyAction.Walk or KittyAction.Chase or KittyAction.Zoomies or KittyAction.Stalk or KittyAction.Pounce or KittyAction.Inspect or KittyAction.Circle or KittyAction.Backoff or KittyAction.TailChase;
         var playful=Action is KittyAction.Chase or KittyAction.Zoomies or KittyAction.Pounce or KittyAction.Swat or KittyAction.TailChase;
+        if (playful && wave > .15 && Irritation < .4)
+        {
+            _sharedPlaySeconds += dt;
+            if (_sharedPlaySeconds >= 4)
+            {
+                Remember(KittyCoreMemoryKind.SharedPlay, .3); Bond = KittyBrain.Unit(Bond + dt * .00015);
+                Prefer(KittyAction.Chase, dt * .0001); Prefer(KittyAction.Swat, dt * .0001);
+            }
+        }
         _roamDrive=KittyBrain.Unit(_roamDrive+dt*(moving ? -.05 : .006));
         Curiosity=KittyBrain.Unit(Curiosity+dt*(Action is KittyAction.Sniff or KittyAction.Inspect ? -.015 : .003)+_novelty*dt*.015);
         _startle*=Math.Exp(-dt/8);
@@ -245,9 +395,9 @@ public sealed class KittyMind
             Sleepiness=KittyBrain.Unit(Sleepiness+dt*(.0035+(moving ? .006 : 0)+(1-Energy)*.002));
         }
         ActionAge+=dt; AttentionAge+=dt; _policyClock+=dt; _episodeAge+=dt;
-        if(_policyClock>=.25 || !_modelReady)
+        if(_policyClock>=.2 || !_modelReady)
         {
-            _brain.Predict(Observation,_policy); _policyClock=0; _modelReady=true; InferenceCount++;
+            _brain.Predict(Observation,_policy); _policyClock%=.2; _modelReady=true; InferenceCount++;
         }
         var urgent=Routine!=KittyRoutine.Recovery && (Irritation>.72 || _startle>.6) && ActionAge>.4;
         var wake=_reconsider && Action is KittyAction.Sleep or KittyAction.Doze && ActionAge>.4;

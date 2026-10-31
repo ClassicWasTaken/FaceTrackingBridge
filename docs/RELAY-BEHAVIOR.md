@@ -1,56 +1,133 @@
-# Relay's behavior design
+# Relay: behavior, context and a personal bond
 
-Relay is an original software character with simulated needs, short-term memory,
-attention and goals. Its small custom recurrent neural policy is trained on original
-synthetic episodes. It is not an LLM and does not understand language. It is a playful interpretation of cat behavior, not a scientific model
-of feline consciousness. There is no language service, camera, microphone,
-interaction recording or cloud inference.
+Relay is an original software pet with simulated needs, attention, a small
+Transformer behavior policy, individual temperament and local memories. It
+does not understand language or have conscious thoughts. The model chooses
+behavior and attention preferences; ordinary application code maintains needs,
+physical constraints, routines, interaction handling and the animated body.
 
-The behavior vocabulary draws on these sources:
+## A genuine small Transformer
 
-- [AAFP/ISFM Feline Environmental Needs Guidelines](https://journals.sagepub.com/doi/full/10.1177/1098612x13477537): opportunities for predatory play, exploration, scratching, familiar resting places, scent-related investigation and varied stimuli. Relay uses stalking/pouncing sequences, sniffing and rubbing panels, and returning to a comfortable spot.
-- [AAHA kitten behavior guidance](https://www.aaha.org/resources/2021-aaha-aafp-feline-life-stage-guidelines/behavior-and-environmental-needs-kittens/): watching, swatting, chasing, pouncing and catching inspired connected play sequences.
-- [Humphrey et al., 2020, Scientific Reports](https://www.nature.com/articles/s41598-020-73426-0): experiments on slow-blink interactions informed Relay's relaxed slow-blink animation. The study does not validate this digital model.
-- [AAHA on kneading](https://www.aaha.org/resources/is-my-cats-kneading-normal/): alternating paw motions inspired kneading before loafing and resting.
+The policy uses two causal pre-LayerNorm Transformer blocks, six attention
+heads, a model width of 96, 192-unit feed-forward layers and sinusoidal position
+encoding. It has 155,848 trained float32 parameters and two output heads for
+35 behaviors and five attention targets: the cursor, surroundings, itself,
+rest, or remembered interests. It evaluates the last 32 normalized observations
+at a nominal 5 Hz cadence, about 6.4 seconds of recent active experience.
 
-Sequence timing, trust, habituation, curiosity and neural state are software design
-choices. They let Relay become less interested in a familiar cursor, attend to
-the surroundings or its own paws, remember an interesting spot, and finish an
-activity before choosing another. Intent descriptions report those internal
-goals; they are not generated claims of conscious thought.
+The app runs inference in C# with reusable buffers. It needs no Python,
+PyTorch, GPU, network account, model download or cloud service. The renderer
+continues at display refresh and blends articulated springs independently.
 
-The 35 behaviors are grouped into interruptible episodes: hunting, settling,
-recovery, grooming, exploration and play. Frustration, willingness, recent-action
-history and learned activity preferences influence which goal is continued,
-abandoned or chosen next. These are software design choices, not claims of real
-feline consciousness.
+Weights were genuinely trained during development with CPU PyTorch on original
+synthetic household-cat sequences. Research informs the scenario design; books,
+articles, videos and real cats' records are not copied into a training corpus.
+The model learns to imitate this design teacher, not to reproduce a biological
+cat brain. [Training recipe, provenance and limitations](RELAY-TRAINING.md) and
+[measured training report](RELAY-TRAINING.json) describe the exact run, held-out
+episodes, unseen event orderings and context tests.
 
-The local 1.4.0 preview adds a physical affordance controller alongside that
-unchanged 35-behavior model. The controller finds usable top edges on visible
-app panels, plans a climb, places Relay's paws on an edge and lets it perch
-there. It refreshes the usable surfaces when the page, scroll position or window
-size changes. These physical interaction poses are separate from the recurrent
-model's learned action labels.
+## Context that reloads
 
-Pressing and dragging Relay's drawn body picks it up. Its legs and tail dangle,
-while head and ear motion respond to the drag. Release sets it down, with a
-nearby valid ledge catching a drop and a soft landing pose easing it back into
-its next activity. The geometry controller handles placement and bounds; the
-neural policy continues to provide simulated behavioral context. None of these
-interactions activate real controls or move the system cursor.
+When the app opens, it reads the saved companion profile without enabling
+Relay. Before the first active decision, it restores personality, familiarity,
+preferences, shared memories and any still-recent Transformer context. The
+kitty itself still starts **off on every launch**.
 
-The articulated renderer uses independently damped body segments, head, ears,
-limbs and tail links. Pose weights, paws, head posture, gaze and facial states
-blend smoothly when an activity changes or is interrupted. Relay makes no sound:
-meows, chirps, yawns and purrs appear only as brief, click-through text bubbles.
-The audio runtime and sound preference from earlier previews have been removed.
-The kitty starts off at every app launch. Enabling it is a session-only choice;
-it pauses in the tray and clears active interactions when hidden.
+The save contains up to 32 quantized, normalized observation summaries. These
+describe simulated needs and broad interaction signals; they do not contain
+cursor coordinates, screenshots, keystrokes, audio, chat messages or raw input
+logs. Recent context older than 30 minutes is discarded so a stale poke or
+startle does not become a fresh event. Lasting traits and shared memories remain.
 
-Separately, the tracking-connection background smoothly slows its particles to
-a stop and dims them when the bridge stops. Restarting the bridge brightens the
-particles and eases them back into motion. Windows reduced-motion preferences
-still apply.
+Only enabling the pet starts a memory session. Disabled first launches do not
+create a save. Active decisions and meaningful interactions are coalesced into
+small atomic saves; hiding, pausing and quitting also flush pending memories.
+The primary file is bounded to 16 KB at
+`%LOCALAPPDATA%\BabbleFrameBridge\kitty-memory.json`. A bounded last-good backup
+can recover a damaged primary save without writing during startup. A bounded
+unreadable copy preserves an unknown or malformed profile before a new session
+replaces it; an oversized unknown file is left untouched. Forget memories also
+clears those recovery copies. Missing, malformed or inaccessible memory cannot
+stop face tracking from opening.
 
-Training and numerical tests are documented in [the neural-policy tests](../tests/Kitty.Tests/README.md).
-Physical placement and pickup geometry checks are documented in [the panel tests](../tests/Kitty.Panel.Tests/README.md).
+## A bond that grows
+
+Each new companion receives an individual temperament, with varying playfulness,
+sociability and caution. Its identity and traits persist. Gentle contact, shared
+play, calm handling and familiar returns influence bounded trust, affection,
+action preferences and social willingness. These values feed the policy and
+attention controller, so memory affects behavior rather than being a display
+label. Positive contact takes active time; a burst of calls or clicks cannot
+instantly manufacture a close bond.
+
+The current core-memory vocabulary is:
+
+- **First gentle pet:** a sustained positive introduction.
+- **Calm handling:** being picked up and gently set down.
+- **Playing together:** completing shared play activity.
+- **Comfort after a fright:** settling after a startle with gentle contact.
+- **Familiar reunions:** recognizing an established saved relationship.
+
+Repeated meaningful experiences reinforce a deduplicated memory. The first
+moment remains identifiable while its strength can grow. Storage is bounded,
+and the current five semantic categories never become an unbounded diary.
+Core memories and temperament affect modeled comfort and preferences. Poking
+can create temporary annoyance and lower willingness, but space and calm contact
+allow recovery; the pet is not permanently punished or distressed by absence.
+
+Growth is saved behavioral state, not background gradient training. The base
+Transformer weights remain fixed while personal memory and preferences change.
+**Settings > Relay's memory > Forget memories** resets only this companion's
+saved bond, temperament, preferences and recent context. Tracking modules,
+connection settings and other application data are untouched.
+
+## Petting, poking and pickup
+
+Move the pointer gently across Relay's drawn body without holding a mouse
+button to pet it. A stationary hover is not a pet; rapid waving is play
+stimulation. A short click is a poke. Press and drag to pick it up, then release
+to set it down. The legs and tail dangle, and a nearby usable ledge may catch
+the drop. Escape, focus loss, hiding or lost capture cancels safely without
+activating controls beneath the cat or inventing a positive handling memory.
+
+Gentle strokes can encourage relaxed poses and silent purr bubbles. Repeated
+pokes can make it grumpy; it also looks away, investigates its environment,
+grooms, rests or plays independently. It does not constantly watch the cursor.
+Hunting, settling, recovery, grooming, exploration and play unfold in connected
+episodes rather than arbitrary pose changes. An eligibility controller keeps
+sleep, movement and interaction choices physically appropriate.
+
+Panel climbing and perching use the actual clipped edges of visible cards.
+Changing tabs, scrolling and resizing refresh those affordances. Physics and
+placement remain separate from the model's learned behavior scores. Relay
+never clicks real controls, changes connection settings or moves the system
+cursor. Visual swats and panel wobble are animation only.
+
+Relay makes **no sound** and speaks no words. Meows, chirps, yawns, purrs and
+other cat noises appear as brief click-through text bubbles. It pauses while
+hidden or in the tray, and respects Windows reduced-motion preferences.
+
+## Behavior research and its scope
+
+These sources inform original scenarios and animation choices, not a claim of
+scientific validation for this digital pet:
+
+| Source | Design influence |
+| --- | --- |
+| [AAFP/ISFM Environmental Needs Guidelines](https://catvets.com/resource/aafp-isfm-environmental-needs-guidelines/) | Safe resting places, elevated retreat, exploration, predatory play, and predictable positive contact. |
+| [AAHA: Behavior and Environmental Needs - Kittens](https://www.aaha.org/resources/2021-aaha-aafp-feline-life-stage-guidelines/behavior-and-environmental-needs-kittens/) | Connected watching, stalking, swatting, chasing and pouncing; gradual gentle handling. |
+| [Hall, Bradshaw and Robinson, 2002](https://www.sciencedirect.com/science/article/abs/pii/S0168159102001533) | Familiar stimuli can lose novelty while changed stimuli renew play interest. |
+| [Humphrey et al., 2020](https://www.nature.com/articles/s41598-020-73426-0) | Relaxed slow-blink interactions. This study does not validate Relay's model. |
+| [FelineVMA: Training Techniques for Addressing Undesirable Behaviors](https://catvets.com/resource/training-techniques-for-addressing-undesirable-behaviors/) | Predictable interactions, play opportunities and recovery rather than persistent aversive responses. |
+| [AAHA on kneading](https://www.aaha.org/resources/is-my-cats-kneading-normal/) | Alternating paw motions before loafing and resting. |
+| [Vaswani et al., Attention Is All You Need](https://arxiv.org/abs/1706.03762) | Transformer architecture background; Relay is an original small implementation and training recipe. |
+
+The exact timing, bond scale, core-memory categories, preferences and emotional
+state variables are software design decisions. No third-party pretrained
+weights or mascot images are bundled. Original artwork, policy weights and
+synthetic training code use the project's Apache 2.0 license.
+
+[Policy and context tests](../tests/Kitty.Tests/README.md) -
+[Memory and gesture checks](../tests/Kitty.Memory.Tests/README.md) -
+[Panel and pickup geometry](../tests/Kitty.Panel.Tests/README.md)

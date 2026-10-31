@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 - Local preview, unreleased
+
+- Relay uses a dedicated causal Transformer trained on original, research-informed cat-behavior sequences.
+- A persistent individual temperament, growing bond, shared core memories, preferences and recent context load locally across sessions. No cloud or background weight training.
+- Gentle cursor strokes pet the cat; clicks poke it; dragging picks it up. Calm handling and positive contact can reinforce shared memories.
+- Settings shows the remembered bond and shared moments, with a way to forget only the kitty's memories. The kitty still starts off every launch and remains completely silent.
+- Memory saves are bounded and atomic. Corrupt or inaccessible kitty data does not prevent the bridge from opening.
+- Reduced-motion mode keeps interactions and memory working without enabling the animation loop. Rapid pokes no longer manufacture simulated elapsed time.
+
 ## 1.1.0
 
 Changes since **1.0.4**. This release replaces the withdrawn 1.5.0 release.

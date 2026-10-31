@@ -17,6 +17,7 @@ public sealed partial class HologramKittyOverlay
     private Point _segmentStart, _segmentEnd;
     private double _worldAge, _worldDuration, _surfaceAge, _nextClimbAt, _perchDwell, _carryTimestamp;
     private bool _releasingCapture;
+    private double _pickupStartedAt, _pickupPeakSpeed;
 
     /// <summary>Current, clipped panel tops in overlay coordinates. No controls are modified.</summary>
     public Func<IReadOnlyList<KittySurface>>? GetSurfaces { get; set; }
@@ -37,6 +38,8 @@ public sealed partial class HologramKittyOverlay
         _position = displayed; _lift = 0; _velocity = default;
         _decisionAccumulator = 0;
         _carryTimestamp = Timestamp();
+        _pickupStartedAt = _carryTimestamp; _pickupPeakSpeed = 0;
+        _petGesture.Reset();
         PlaceCat();
         return true;
     }
@@ -46,7 +49,10 @@ public sealed partial class HologramKittyOverlay
         Dispatcher.VerifyAccess();
         if (_disposed || !_carry.IsPressed) return;
         var now = Timestamp();
+        var wasDragging = _carry.IsDragging;
         var next = _carry.Move(point.X, point.Y, now - _carryTimestamp, ActualWidth, ActualHeight);
+        if (!wasDragging && _carry.IsDragging) { _mind.OnPickup(); MarkMemoryDirty(); }
+        _pickupPeakSpeed = Math.Max(_pickupPeakSpeed, Math.Sqrt(_carry.Velocity.X * _carry.Velocity.X + _carry.Velocity.Y * _carry.Velocity.Y));
         _carryTimestamp = now;
         _position = new Point(next.X, next.Y);
         _velocity = new Vector(_carry.Velocity.X, _carry.Velocity.Y);
@@ -69,6 +75,9 @@ public sealed partial class HologramKittyOverlay
         }
         else
         {
+            var calmness = Timestamp() - _pickupStartedAt >= .4 ? Math.Clamp(1 - _pickupPeakSpeed / 650, 0, 1) : 0;
+            _mind.EndPickup(calmness);
+            MarkMemoryDirty();
             _pressedPerch = null;
             if (KittyPanelWorld.TryFindNearestPerch(ReadSurfaces(), ActualWidth, ActualHeight,
                 _position.X, _position.Y, 72, out var target))
@@ -93,6 +102,7 @@ public sealed partial class HologramKittyOverlay
     {
         Dispatcher.VerifyAccess();
         if (!_carry.IsPressed) { ReleasePickupCapture(); return; }
+        if (_carry.IsDragging) _mind.EndPickup(0); // Cancel clears the live carry without a positive memory.
         _carry.Cancel(); _velocity = default; _lift = 0;
         RestorePressedPerch();
         _position = ClampWorldPosition(_position); _target = _position;

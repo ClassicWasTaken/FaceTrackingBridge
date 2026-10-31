@@ -8,5 +8,8 @@
   <ItemGroup>
     <Compile Include="../../src/BabbleFrameBridge.App/KittyBrain.cs" Link="KittyBrain.cs" />
     <Compile Include="../../src/BabbleFrameBridge.App/KittyModel.cs" Link="KittyModel.cs" />
+    <Compile Include="../../src/BabbleFrameBridge.App/KittyTransformer.cs" Link="KittyTransformer.cs" />
+    <Compile Include="../../src/BabbleFrameBridge.App/KittyMemory.cs" Link="KittyMemory.cs" />
+    <None Include="transformer-golden.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
