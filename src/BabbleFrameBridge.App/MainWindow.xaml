@@ -29,13 +29,17 @@
    <Viewbox Stretch="Fill" VerticalAlignment="Bottom" Height="200" Opacity="0.09"><Canvas Width="1000" Height="200"><Path Stroke="{DynamicResource Accent}" StrokeThickness="1" Data="M-30,95C180,190 300,-20 550,90S850,195 1030,100 M-30,112C180,207 300,-3 550,107S850,212 1030,117 M-30,129C180,224 300,14 550,124S850,229 1030,134"/></Canvas></Viewbox>
   </Grid>
   <Grid Grid.Column="1" Margin="32,25,32,18">
-   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-   <Grid Margin="0,0,0,23"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+   <Grid x:Name="PageHeader" Margin="0,0,0,23"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
     <StackPanel><TextBlock x:Name="PageTitle" Text="Face Tracking Bridge" Style="{StaticResource PageHeading}"/><TextBlock x:Name="PageSubtitle" Text="Your expressions, connected." Foreground="{DynamicResource Muted}" FontSize="13" Margin="0,3,0,0"/></StackPanel>
     <Border Grid.Column="1" CornerRadius="16" Background="{DynamicResource SoftBackground}" Padding="12,7" VerticalAlignment="Center"><StackPanel Orientation="Horizontal"><Ellipse Width="6" Height="6" Fill="{DynamicResource Accent}" Margin="0,0,7,0"/><TextBlock x:Name="ProviderTag" MaxWidth="240" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Text="MODULES" Foreground="{DynamicResource AccentInk}" FontWeight="SemiBold" FontSize="10"/></StackPanel></Border>
    </Grid>
-   <Border x:Name="GlobalNotice" Grid.Row="1" Visibility="Collapsed" Background="{DynamicResource ErrorBackground}" BorderBrush="{DynamicResource ErrorBorder}" BorderThickness="1" CornerRadius="12" Padding="14,9" Margin="0,0,0,14"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="GlobalNoticeText" FontSize="12" Foreground="{DynamicResource ErrorInk}" VerticalAlignment="Center" TextWrapping="Wrap"/><Button x:Name="GlobalNoticeDismiss" Grid.Column="1" Content="×" Style="{StaticResource LinkButton}" Foreground="{Binding Foreground,ElementName=GlobalNoticeText}" FontSize="20" Padding="6,0" Margin="10,0,0,0" ToolTip="Dismiss notification" AutomationProperties.Name="Dismiss notification" Click="DismissNotice_Click"/></Grid></Border>
-   <ScrollViewer x:Name="ContentScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,5,0" ScrollChanged="ContentScroll_Changed" SizeChanged="KittySurface_SizeChanged" LayoutUpdated="KittySurface_LayoutUpdated">
+   <!-- Canvas contributes no desired size. Notices use the noninteractive header,
+        so showing/dismissing one never moves or covers a page action target. -->
+   <Canvas Grid.Row="0" Panel.ZIndex="10">
+    <Border x:Name="GlobalNotice" Visibility="Collapsed" Width="{Binding ActualWidth,ElementName=PageHeader}" Height="{Binding ActualHeight,ElementName=PageHeader}" Background="{DynamicResource ErrorBackground}" BorderBrush="{DynamicResource ErrorBorder}" BorderThickness="1" CornerRadius="12" Padding="14,7" ToolTip="{Binding Text,ElementName=GlobalNoticeText}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="GlobalNoticeText" FontSize="12" Foreground="{DynamicResource ErrorInk}" VerticalAlignment="Center" MaxHeight="40" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" AutomationProperties.LiveSetting="Polite"/><Button x:Name="GlobalNoticeDismiss" Grid.Column="1" Content="×" Style="{StaticResource LinkButton}" Foreground="{Binding Foreground,ElementName=GlobalNoticeText}" FontSize="20" Padding="6,0" Margin="10,0,0,0" VerticalAlignment="Center" ToolTip="Dismiss notification" AutomationProperties.Name="Dismiss notification" Click="DismissNotice_Click"/></Grid></Border>
+   </Canvas>
+   <ScrollViewer x:Name="ContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,5,0" ScrollChanged="ContentScroll_Changed" SizeChanged="KittySurface_SizeChanged" LayoutUpdated="KittySurface_LayoutUpdated">
     <Grid>
      <StackPanel x:Name="OverviewPage">
       <Border Tag="KittyPanel" CornerRadius="18" Padding="0" Margin="0,0,0,18" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" ClipToBounds="True">
@@ -146,7 +150,7 @@
      <Grid x:Name="ActivityPage" Visibility="Collapsed"><Border Tag="KittyPanel" Style="{StaticResource Card}" Padding="24"><StackPanel><Grid Margin="0,0,0,18"><TextBlock Text="What’s happening behind the scenes." FontSize="20" FontWeight="Bold"/><Button Content="Open log folder  ↗" Style="{StaticResource LinkButton}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,40,0,0" Click="Logs_Click"/></Grid><TextBox x:Name="LogBox" MinHeight="400" MaxHeight="520" Height="450" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" BorderThickness="0" Background="{DynamicResource LogBackground}" Padding="14" AutomationProperties.Name="Activity log"/></StackPanel></Border></Grid>
     </Grid>
    </ScrollViewer>
-   <Grid Grid.Row="3" Margin="0,17,0,0"><TextBlock Text="Independent project. Built on VRCFaceTracking." Foreground="{DynamicResource FaintInk}" FontSize="10"/><Button Content="GitHub  ↗" Style="{StaticResource LinkButton}" FontSize="10" HorizontalAlignment="Right" Click="Website_Click"/></Grid>
+   <Grid Grid.Row="2" Margin="0,17,0,0"><TextBlock Text="Independent project. Built on VRCFaceTracking." Foreground="{DynamicResource FaintInk}" FontSize="10"/><Button Content="GitHub  ↗" Style="{StaticResource LinkButton}" FontSize="10" HorizontalAlignment="Right" Click="Website_Click"/></Grid>
   </Grid>
   <local:HologramKittyOverlay x:Name="KittyOverlay" Grid.ColumnSpan="2" Panel.ZIndex="100" ClipToBounds="True"/>
  </Grid>

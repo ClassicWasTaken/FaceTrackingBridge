@@ -14,6 +14,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -713,7 +714,13 @@ public partial class MainWindow : Window
         GlobalNotice.SetResourceReference(Border.BackgroundProperty, error ? "ErrorBackground" : "NoticeBackground");
         GlobalNotice.SetResourceReference(Border.BorderBrushProperty, error ? "ErrorBorder" : "NoticeBorder");
         GlobalNoticeText.SetResourceReference(TextBlock.ForegroundProperty, error ? "ErrorInk" : "NoticeInk");
+        // Hidden retains the header's measured size. The overlay never enters
+        // page flow or intercepts controls beneath the noninteractive header.
+        PageHeader.Visibility = Visibility.Hidden;
         GlobalNotice.Visibility = Visibility.Visible;
+        AutomationProperties.SetLiveSetting(GlobalNoticeText, error ? AutomationLiveSetting.Assertive : AutomationLiveSetting.Polite);
+        var peer = UIElementAutomationPeer.FromElement(GlobalNoticeText) ?? UIElementAutomationPeer.CreatePeerForElement(GlobalNoticeText);
+        peer?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         Motion.Transition(GlobalNotice, _motionEnabled);
         if (!error) { _noticeTimer.Interval = TimeSpan.FromSeconds(4); _noticeTimer.Start(); }
     }
@@ -731,6 +738,7 @@ public partial class MainWindow : Window
         _noticeTimer.Stop();
         _noticeFading = false;
         GlobalNotice.Visibility = Visibility.Collapsed;
+        PageHeader.Visibility = Visibility.Visible;
         Motion.Transition(GlobalNotice, false);
     }
 

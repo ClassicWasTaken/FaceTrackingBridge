@@ -67,6 +67,8 @@ $migrationTargetVersion = '1.0.0'
 $generationReset = $upgradeVersion -eq '1.0.0' -and (
     ($initialDisplayName -eq 'Babble Bridge' -and $initialVersion -in @('1.0.1', '1.0.2')) -or
     ($initialDisplayName -eq 'FaceTracking Bridge' -and $initialVersion -eq '1.0.3'))
+$withdrawnReleaseReset = $previousPayload -and $upgradeVersion -eq '1.1.0' -and
+    $initialVersion -eq '1.5.0' -and $initialDisplayName -eq 'Face Tracking Bridge'
 $sameVersionReplacement = $false
 if ($AllowSameVersionReplacement) {
     if (!$previousPayload -or ([Version]$upgradeVersion -ne [Version]$initialVersion)) {
@@ -79,8 +81,8 @@ if ($AllowSameVersionReplacement) {
     }
     $sameVersionReplacement = $true
 }
-if ($previousPayload -and !$generationReset -and !$sameVersionReplacement -and ([Version]$upgradeVersion -le [Version]$initialVersion)) {
-    throw 'PreviousPayloadDirectory must contain an older app version or an exact known generation-2 reset source.'
+if ($previousPayload -and !$generationReset -and !$withdrawnReleaseReset -and !$sameVersionReplacement -and ([Version]$upgradeVersion -le [Version]$initialVersion)) {
+    throw 'PreviousPayloadDirectory must contain an older app version or an exact known public numbering-reset source.'
 }
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -212,7 +214,7 @@ function Get-UserDataSnapshot {
     }
     return ConvertTo-Json -InputObject @($files.ToArray()) -Depth 5 -Compress
 }
-function Compile-TestInstaller([string]$Version, [string]$DisplayName = 'Face Tracking Bridge') {
+function Compile-TestInstaller([string]$Version, [string]$DisplayName = 'Face Tracking Bridge', [int]$Generation = 4) {
     Write-Output "Building isolated installer $Version..."
     $iconPath = if (Test-Path -LiteralPath (Join-Path $payload 'Assets/Brand/FaceTrackingBridge-headset-v2.ico')) {
         'Assets\Brand\FaceTrackingBridge-headset-v2.ico'
@@ -224,6 +226,7 @@ function Compile-TestInstaller([string]$Version, [string]$DisplayName = 'Face Tr
         "--define=BuildIdentity=$testId",
         "--define=ProductName=$testProductName",
         "--define=DisplayName=$DisplayName",
+        "--define=ReleaseGeneration=$Generation",
         "--define=HeadsetIconPath=$iconPath",
         "--define=IconDesktopDir=$desktopIconDirectory",
         "--define=IconGroupDir=$groupIconDirectory",
@@ -268,7 +271,7 @@ function Set-TestRegistrationFixture([string]$Version, [string]$Name, [Nullable[
 }
 function Restore-CurrentRegistration {
     if (Test-Path -LiteralPath $registryKey) {
-        Set-TestRegistrationFixture $upgradeVersion 'Face Tracking Bridge' 3
+        Set-TestRegistrationFixture $upgradeVersion 'Face Tracking Bridge' 4
     }
 }
 function Assert-AcceptedMigration([string]$Setup, [string]$Version, [string]$Name, [Nullable[int]]$Generation, [string]$Label, [string]$ExpectedVersion = $script:migrationTargetVersion) {
@@ -278,7 +281,7 @@ function Assert-AcceptedMigration([string]$Setup, [string]$Version, [string]$Nam
         Assert-True ($exitCode -eq 0) "Known migration was rejected: $Label."
         $registration = Read-TestRegistration
         Assert-True ($registration.DisplayVersion -eq $ExpectedVersion) "Migration registered the wrong target version: $Label."
-        Assert-True ((Get-ItemPropertyValue -LiteralPath $registryKey -Name BabbleBridgeReleaseGeneration) -eq 3) "Migration did not record generation 3: $Label."
+        Assert-True ((Get-ItemPropertyValue -LiteralPath $registryKey -Name BabbleBridgeReleaseGeneration) -eq 4) "Migration did not record generation 4: $Label."
         Assert-InstalledPayload $payloadSource
         Assert-ForeignShortcutUnchanged
         Assert-OwnedStartShortcuts
@@ -406,12 +409,13 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     $foreignLegacyHash = (Get-FileHash -LiteralPath $foreignLegacyShortcut -Algorithm SHA256).Hash
     $marker = Join-Path $payload 'installer-smoke-marker.txt'
     [IO.File]::WriteAllText($marker, 'first-release')
-    Compile-TestInstaller $initialVersion $initialDisplayName
+    Compile-TestInstaller $initialVersion $initialDisplayName 3
     $firstSetup = Join-Path $compiledPath "FrameBridgeTest-$initialVersion.exe"
     $exitCode = Invoke-TestSetup $firstSetup 'install' $true
     Assert-True ($exitCode -eq 0) "First installation failed with exit code $exitCode."
     $registration = Read-TestRegistration
     Assert-True ($registration.DisplayVersion -eq $initialVersion) 'First install version is incorrect.'
+    Assert-True ($registration.BabbleBridgeReleaseGeneration -eq 3) 'The historical payload fixture did not record generation 3.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installPath 'installer-smoke-marker.txt') -Raw) -eq 'first-release') 'Initial payload marker was not installed.'
     Assert-InstalledPayload $payload
     Assert-SteamVrRefresh $payload
@@ -491,7 +495,7 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     $expectedDisplayName = 'Face Tracking Bridge'
     $registration = Read-TestRegistration
     Assert-True ($registration.DisplayVersion -eq $upgradeVersion) 'Upgrade did not update DisplayVersion.'
-    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryKey -Name BabbleBridgeReleaseGeneration) -eq 3) 'Upgrade did not register public release generation 3.'
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryKey -Name BabbleBridgeReleaseGeneration) -eq 4) 'Upgrade did not register public release generation 4.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installPath 'installer-smoke-marker.txt') -Raw) -eq 'upgraded-release') 'Upgrade did not replace the payload marker.'
     Assert-True (!(Test-Path -LiteralPath (Join-Path $legacyAssets 'Baballonia-module.zip'))) 'Upgrade retained the legacy baked-in archive.'
     Assert-True (!(Test-Path -LiteralPath (Join-Path $installPath 'Assets/Brand/FrameBridge-headset-v1.ico'))) 'Upgrade retained the retired green shortcut icon.'
@@ -518,7 +522,7 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     Assert-True ((Get-Content -LiteralPath (Join-Path $previousNamedGroup 'keep.txt') -Raw) -eq 'unrelated existing group content') 'Spacing-name migration removed unrelated group content.'
     Add-Check 'The real upgrade migrates owned FaceTracking Bridge Start menu shortcuts after their new replacements exist.'
     if ($generationReset) {
-        Add-Check "Known generation-2 $initialDisplayName $initialVersion migrated to $upgradeVersion and recorded generation 3."
+        Add-Check "Known generation-2 $initialDisplayName $initialVersion migrated to $upgradeVersion and recorded generation 4."
     }
 
     # Exercise exact known reset sources and reject unknown or future builds.
@@ -541,7 +545,7 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     foreach ($legacyName in @('Frame Bridge', 'Steam Frame Babble Bridge')) {
         Assert-AcceptedMigration $migrationSetup '1.5.1' $legacyName $null ("development-" + $legacyName.Replace(' ', '-'))
     }
-    Add-Check 'Unmarked private previews and exact older development builds migrate and record generation 3.'
+    Add-Check 'Unmarked private previews and exact older development builds migrate and record generation 4.'
 
     $rejectedCases = @(
         @('1.0.1', 'Babble Bridge', 3),
@@ -581,11 +585,39 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     Assert-RejectedMigration $skippedResetSetup '1.0.2' 'Babble Bridge' 3 'skip-reset-generation-three-babble-rejected'
     Add-Check 'A later 1.0.1 installer accepts skipped-reset generation-2/preview sources and rejects the same numeric transitions after generation 3.'
 
+    # The withdrawn public 1.5.0 release must update directly to 1.1.0 without
+    # disabling numeric downgrade protection for any adjacent release or identity.
+    $withdrawnResetVersion = '1.1.0'
+    $withdrawnResetSetup = Join-Path $compiledPath "FrameBridgeTest-$withdrawnResetVersion.exe"
+    if ($upgradeVersion -ne $withdrawnResetVersion) { Compile-TestInstaller $withdrawnResetVersion }
+    Assert-AcceptedMigration $withdrawnResetSetup '1.5.0' 'Face Tracking Bridge' 3 'withdrawn-150-reset' $withdrawnResetVersion
+    Add-Check 'Only the exact withdrawn Face Tracking Bridge 1.5.0 generation-3 release migrates to 1.1.0 and records generation 4.'
+    $withdrawnRejectedCases = @(
+        @('1.5.0', 'Face Tracking Bridge', 4),
+        @('1.5.0', 'Face Tracking Bridge', 2),
+        @('1.5.0', 'Face Tracking Bridge', $null),
+        @('1.5.0', 'FaceTracking Bridge', 3),
+        @('1.5.0', 'Babble Bridge', 3),
+        @('1.5.0', 'Unrelated Bridge', 3),
+        @('1.5.1', 'Face Tracking Bridge', 3),
+        @('1.5.0', 'Face Tracking Bridge', 5),
+        @('1.6.0', 'Face Tracking Bridge', 3)
+    )
+    $caseIndex = 0
+    foreach ($case in $withdrawnRejectedCases) {
+        $caseIndex++
+        Assert-RejectedMigration $withdrawnResetSetup $case[0] $case[1] $case[2] "reject-withdrawn-numbering-$caseIndex"
+    }
+    Add-Check 'The withdrawn-release exception rejects unknown names, adjacent versions, missing markers, and generation-4/future builds without changing files.'
+    Compile-TestInstaller '1.1.1'
+    Assert-RejectedMigration (Join-Path $compiledPath 'FrameBridgeTest-1.1.1.exe') '1.5.0' 'Face Tracking Bridge' 3 'withdrawn-reset-exact-target-only'
+    Add-Check 'A later 1.1.1 installer cannot reuse the one-time 1.5.0-to-1.1.0 migration exception.'
+
     if (!$generationReset) {
         $downgradeSetup = $firstSetup
-        if ($sameVersionReplacement) {
-            # Same-version replacement is intentionally permitted by Setup.
-            # Build a genuinely older numeric setup to retain downgrade coverage.
+        if ($sameVersionReplacement -or $withdrawnReleaseReset) {
+            # Same-version and withdrawn-release replacement both have separate
+            # coverage. Use a genuinely older numeric setup for downgrade checks.
             Assert-True ([Version]$upgradeVersion -gt [Version]'0.0.0') 'A numeric downgrade fixture needs a release newer than 0.0.0.'
             Compile-TestInstaller '0.0.0'
             $downgradeSetup = Join-Path $compiledPath 'FrameBridgeTest-0.0.0.exe'
@@ -708,7 +740,8 @@ finally {
         RealPayloadUpgrade = [bool]$previousPayload
         SameVersionReplacement = [bool]$sameVersionReplacement
         GenerationTwoReset = [bool]$generationReset
-        PublicReleaseGeneration = 3
+        WithdrawnReleaseReset = [bool]$withdrawnReleaseReset
+        PublicReleaseGeneration = 4
         DevelopmentMigrationTarget = $migrationTargetVersion
         ShortcutDirectories = @($desktopIconDirectory, $groupIconDirectory)
         AvatarDiscovery = 'Not tested; existing --all-parameters diagnostic mode avoids any running VRChat client.'

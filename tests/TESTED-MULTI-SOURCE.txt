@@ -1,26 +1,35 @@
-FACE TRACKING BRIDGE 1.5.0 — RELEASE VALIDATION
+FACE TRACKING BRIDGE 1.1.0 — RELEASE VALIDATION
 Validated on Windows x64, 31 October 2026.
 
-- 60 interface regressions passed. Selected eye/face cards retain their roles,
+- 61 interface regressions passed. Selected eye/face cards retain their roles,
   render at full opacity with readable contrast, and cannot accidentally replace
   the combined pair. Missing selected sources remain visible in the selectors.
   Checks also cover Start/Stop navigation, themes, pair persistence/rollback,
   removal, failed saves, read-only logs, kitty behavior, modules and system tray.
-- 13 simultaneous-module runtime checks passed. Separate inputs feed one nominal
+  Notices preserve content/control coordinates and pointer targets in both themes
+  at normal and minimum widths. Duplicate Virtual Desktop pair rejection keeps
+  the live worker and saved pair intact. Preview rendering uses explicit bounds.
+- 16 simultaneous-module runtime checks passed. Separate inputs feed one nominal
   90 Hz sender. Checks cover channel ownership, stale neutralization, partial and
   completely offline sources, malformed snapshots, recovery, port conflicts,
   same-module deduplication, first-frame startup validation, normal teardown,
-  and abrupt-parent orphan prevention.
+  and abrupt-parent orphan prevention. Each child initializes only its assigned
+  role, unsupported roles fail clearly, and duplicate Virtual Desktop consumers
+  cannot compete for their shared tracking event. A shared profile runs once.
 - Official EyeTrackVR + Baballonia modules accepted synthetic loopback input and
   produced combined avatar OSC. The official Beyond module accepted synthetic
-  shared memory, including invalid/stopped timestamp transitions.
+  shared memory, including invalid/stopped timestamp transitions. Three separate
+  official-runtime checks also passed for EyeTrackVR, Beyond and offline SRanipal.
 - Persistent selection tests passed 19 scenarios / 192 assertions, including
   corrupt custom-DLL recovery without weakening activation or metadata checks.
 - The existing shared/module-store suite passed 50 regressions.
 - Native avatar routing passed 10 checks, including temporary discovery failure,
   explicit capability changes, and avatar changes.
-- Public 1.0.4 to 1.5.0 installer testing passed 27 checks. Details are preserved
-  in installer/TESTED-INSTALLER.txt and the local isolated smoke report.
+- Nine sending checks passed, including nominal 90 Hz cadence, bounded jitter,
+  stationary gaze refresh, concurrent rebinding, and clean cancellation.
+- Installer upgrade/replacement testing passed 30 checks each for exact public 1.0.4 and withdrawn
+  1.5.0 payloads to 1.1.0. Details are preserved in installer/TESTED-INSTALLER.txt
+  and the local isolated smoke reports.
 - Distribution license/copyright, external-module exclusion and private-path
   checks passed. Modules remain separate author downloads.
 

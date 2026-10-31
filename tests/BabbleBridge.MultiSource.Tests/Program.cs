@@ -86,8 +86,54 @@ await Test("identical module selections keep the existing single-module path", a
     using var probe = Start(profile, module, module); await probe.WaitReady();
     Check(probe.Messages.Where(message => Type(message) == "ready").All(message => !message.TryGetProperty("combined", out var combined) || !combined.GetBoolean()),
         "Identical module selection unnecessarily created combined workers.");
+    using var requested = JsonDocument.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(module)!, "fixture-requested-channels.json")));
+    Check(requested.RootElement.GetProperty("eye").GetBoolean() && requested.RootElement.GetProperty("face").GetBoolean(),
+        "The shared module did not initialize both assigned channels.");
     await Until(() => output.Has("/v2/JawOpen", .6f), "The existing single-module output path changed.");
     await probe.Stop();
+});
+
+await Test("combined inputs initialize only their assigned hardware channels", async () =>
+{
+    using var output = new OscCapture(); var profile = Profile("role-initialization", output.Port);
+    var eye = Fixture(profile, "eye", new()); var face = Fixture(profile, "face", new() { ["jaw"] = .69f });
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(eye)!, "fixture-mode.txt"), "exclusive-eyes");
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(face)!, "fixture-mode.txt"), "exclusive-face");
+    using var probe = Start(profile, eye, face); await probe.WaitReady();
+    await Until(() => probe.Status(status => status.GetProperty("eyeAvailable").GetBoolean() && status.GetProperty("faceAvailable").GetBoolean()),
+        "A producer tried to initialize the other module's assigned hardware channel.");
+    using var eyeRequest = JsonDocument.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(eye)!, "fixture-requested-channels.json")));
+    using var faceRequest = JsonDocument.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(face)!, "fixture-requested-channels.json")));
+    Check(eyeRequest.RootElement.GetProperty("eye").GetBoolean() && !eyeRequest.RootElement.GetProperty("face").GetBoolean()
+        && !faceRequest.RootElement.GetProperty("eye").GetBoolean() && faceRequest.RootElement.GetProperty("face").GetBoolean(), "Initialize requests did not match the roles.");
+    await Until(() => output.Has("/v2/JawOpen", .69f), "Role-limited initialization suppressed valid output.");
+    await probe.Stop();
+});
+
+await Test("modules claiming only the opposite roles fail clearly instead of waiting forever", async () =>
+{
+    using var output = new OscCapture(); var profile = Profile("wrong-roles", output.Port);
+    var eye = Fixture(profile, "eye", new()); var face = Fixture(profile, "face", new());
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(eye)!, "fixture-mode.txt"), "face-only");
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(face)!, "fixture-mode.txt"), "eyes-only");
+    using var probe = Start(profile, eye, face);
+    await Until(() => probe.Messages.Any(message => Type(message) == "fatal"), "A pair with no assigned-role capability remained running indefinitely.");
+    Check(probe.Messages.Any(message => Type(message) == "fatal" && message.GetProperty("message").GetString()!.Contains("selected")),
+        "The failed role selection did not explain its capability mismatch.");
+    Check(!probe.Messages.Any(message => Type(message) == "ready") && output.SourcePorts.Count == 0,
+        "An incompatible role pair announced ready or sent avatar output.");
+    await probe.WaitExit();
+});
+
+await Test("separate Virtual Desktop profiles cannot compete for the same tracking event", async () =>
+{
+    using var output = new OscCapture(); var profile = Profile("duplicate-vd", output.Port);
+    using var probe = Start(profile, Fixture(profile, "eye", new()), Fixture(profile, "face", new()), "VirtualDesktop", "VirtualDesktop");
+    await Until(() => probe.Messages.Any(message => Type(message) == "fatal"), "Two Virtual Desktop consumers were allowed to wait on the same event.");
+    Check(probe.Messages.Any(message => Type(message) == "fatal" && message.GetProperty("message").GetString()!.Contains("same Virtual Desktop profile")),
+        "The duplicate-provider error did not explain the single-profile solution.");
+    Check(!Directory.GetFiles(profile, "fixture-initialized.txt", SearchOption.AllDirectories).Any(), "Duplicate Virtual Desktop inputs started before preflight rejection.");
+    await probe.WaitExit();
 });
 
 await Test("malformed child snapshots remain isolated and do not break normal coordinator shutdown", async () =>
@@ -189,6 +235,9 @@ await Test("official EyeTrackVR and Baballonia modules merge their real input pr
         "EyeTrackVR", "BaballoniaDesktop", ["--face-input-port", facePort.ToString()]);
     await probe.WaitReady();
     await Until(() => probe.Status(status => status.GetProperty("eyeAvailable").GetBoolean() && status.GetProperty("faceAvailable").GetBoolean()), "The official pair did not initialize.");
+    using var babbleConfig = JsonDocument.Parse(File.ReadAllText(Path.Combine(face.DirectoryPath, "BabbleConfig.json")));
+    Check(!babbleConfig.RootElement.GetProperty("IsEyeSupported").GetBoolean() && babbleConfig.RootElement.GetProperty("IsFaceSupported").GetBoolean(),
+        "The face-only Baballonia profile enabled the other provider's eye channel.");
     using var input = new UdpClient();
     var clock = Stopwatch.StartNew();
     while (clock.Elapsed < TimeSpan.FromSeconds(1))

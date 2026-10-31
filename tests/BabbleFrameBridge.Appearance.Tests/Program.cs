@@ -445,6 +445,81 @@ internal static class Program
                     "save confirmation automatically dismissed", TimeSpan.FromSeconds(6));
             });
 
+            Test("notifications never move or cover page controls while saving, changing pages or dismissing", () =>
+            {
+                var originalWidth = window.Width;
+                var originalTheme = themes.CurrentIsDark;
+                Rect Bounds(FrameworkElement element) => element.TransformToAncestor(window).TransformBounds(new Rect(element.RenderSize));
+                void Unchanged(FrameworkElement element, Rect expected, string operation)
+                {
+                    window!.UpdateLayout();
+                    var actual = Bounds(element);
+                    Check(Math.Abs(actual.X - expected.X) < .1 && Math.Abs(actual.Y - expected.Y) < .1
+                        && Math.Abs(actual.Width - expected.Width) < .1 && Math.Abs(actual.Height - expected.Height) < .1,
+                        $"{element.Name} shifted during {operation}: {expected} -> {actual}.");
+                }
+                try
+                {
+                    foreach (var dark in new[] { false, true })
+                    foreach (var width in new[] { originalWidth, window.MinWidth })
+                    {
+                        themes.ApplyTheme(dark); window.Width = width;
+                        Method(window, "DismissNotice").Invoke(window, []);
+                        Named<RadioButton>(window, "SettingsNav").IsChecked = true;
+                        PumpUntil(() => Named<StackPanel>(window, "SettingsPage").Opacity >= .999, "connection page transition finished");
+                        PumpFor(TimeSpan.FromMilliseconds(240));
+                        window.UpdateLayout();
+                        var surface = Named<Grid>(window, "RootSurface");
+                        var sidebar = (Border)surface.Children[0];
+                        var sidebarBounds = sidebar.TransformToAncestor(surface).TransformBounds(new Rect(sidebar.RenderSize));
+                        Check(Math.Abs(sidebarBounds.X) < .1 && Math.Abs(sidebarBounds.Width - 216) < .1,
+                            "The arranged sidebar was clipped or shifted inside the narrow window.");
+                        var save = Named<Button>(window, "SaveButton");
+                        var host = Named<TextBox>(window, "HostBox");
+                        var scroll = Named<ScrollViewer>(window, "ContentScroll");
+                        var saveBounds = Bounds(save); var hostBounds = Bounds(host); var scrollBounds = Bounds(scroll);
+                        var hitPoint = new Point(saveBounds.Left + saveBounds.Width / 2, saveBounds.Top + saveBounds.Height / 2);
+                        var hitBefore = window.InputHitTest(hitPoint);
+                        Method(window, "Save_Click").Invoke(window, [save, new RoutedEventArgs()]);
+                        PumpUntil(() => !Field<bool>(window, "_busy"), "save left controls ready");
+                        Unchanged(save, saveBounds, "save confirmation"); Unchanged(host, hostBounds, "save confirmation");
+                        Unchanged(scroll, scrollBounds, "save confirmation");
+                        Check(ReferenceEquals(window.InputHitTest(hitPoint), hitBefore), "A notice intercepted the prior save-button hit target.");
+                        var notice = Named<Border>(window, "GlobalNotice");
+                        Check(Bounds(notice).Bottom < scrollBounds.Top, "The notice overlaps interactive page content.");
+                        Check(Named<Grid>(window, "PageHeader").Visibility == Visibility.Hidden,
+                            "The notice is drawn over the heading instead of replacing it without layout changes.");
+                        Check(AutomationProperties.GetLiveSetting(Named<TextBlock>(window, "GlobalNoticeText")) == AutomationLiveSetting.Polite,
+                            "Success confirmations do not announce as polite live updates.");
+                        Named<RadioButton>(window, "PreferencesNav").IsChecked = true;
+                        PumpUntil(() => Named<StackPanel>(window, "PreferencesPage").Opacity >= .999, "settings transition finished with notice visible");
+                        PumpFor(TimeSpan.FromMilliseconds(240));
+                        var preference = Named<CheckBox>(window, "StartMinimizedBox");
+                        var preferenceBounds = Bounds(preference);
+                        Method(window, "ShowNotice").Invoke(window, [string.Join(" ", Enumerable.Repeat("A long module error must not move the settings or hide the dismiss button.", 12)), true]);
+                        PumpFor(TimeSpan.FromMilliseconds(240));
+                        Unchanged(preference, preferenceBounds, "long replacement error"); Unchanged(scroll, scrollBounds, "long replacement error");
+                        Check(Bounds(notice).Bottom < scrollBounds.Top, "A long error escaped the header and covered controls.");
+                        var dismiss = Named<Button>(window, "GlobalNoticeDismiss");
+                        Check(dismiss.IsVisible && Bounds(notice).Contains(Bounds(dismiss)), "A long error clipped its dismiss action.");
+                        Check(AutomationProperties.GetLiveSetting(Named<TextBlock>(window, "GlobalNoticeText")) == AutomationLiveSetting.Assertive,
+                            "Errors do not announce as assertive live updates.");
+                        SavePreview(window, renderDirectory, $"stable-notice-{(dark ? "dark" : "light")}-{width:0}.png");
+                        dismiss.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        Unchanged(preference, preferenceBounds, "manual dismissal"); Unchanged(scroll, scrollBounds, "manual dismissal");
+                        Check(Named<Grid>(window, "PageHeader").Visibility == Visibility.Visible,
+                            "Dismissing the notice did not restore the page heading.");
+                    }
+                }
+                finally
+                {
+                    Method(window, "DismissNotice").Invoke(window, []);
+                    window.Width = originalWidth; themes.ApplyTheme(originalTheme);
+                    Named<RadioButton>(window, "OverviewNav").IsChecked = true;
+                    Pump();
+                }
+            });
+
             Test("new notices survive an older timeout and errors remain until dismissed", () =>
             {
                 Method(window, "ShowNotice").Invoke(window, ["Old confirmation", false]);
@@ -1791,6 +1866,12 @@ internal static class Program
                     var face = store.Prepare(ModuleFixture(suppliedZip, fixtures, "4.0.32", facePort, link), ModuleKind.BaballoniaDesktop); store.Register(face);
                     var collision = store.Prepare(ModuleFixture(suppliedZip, fixtures, "4.0.33", eyePort, link), ModuleKind.BaballoniaDesktop); store.Register(collision);
                     var blocked = store.Prepare(ModuleFixture(suppliedZip, fixtures, "4.0.34", PortOf(occupied), link), ModuleKind.BaballoniaDesktop); store.Register(blocked);
+                    ModuleRelease? firstVd = null, secondVd = null;
+                    if (virtualDesktopZip is not null)
+                    {
+                        firstVd = store.Prepare(virtualDesktopZip); store.Register(firstVd);
+                        secondVd = store.Prepare(virtualDesktopZip); store.Register(secondVd);
+                    }
                     store.Activate(eye);
                     void Apply(ModuleRelease eyeSource, ModuleRelease faceSource)
                     {
@@ -1882,6 +1963,16 @@ internal static class Program
                         Check(Field<bool>(window, "_running") && Field<Process>(window, "_worker").Id == pairPid
                             && File.ReadAllText(Path.Combine(profile, "modules", "module-state.json")) == savedPairState,
                             "A prevalidated input-port collision interrupted the working pair or changed its saved selection.");
+                        if (firstVd is not null && secondVd is not null)
+                        {
+                            Apply(firstVd, secondVd); CheckPair(eye, face, checkDraft: false);
+                            Check(Field<bool>(window, "_running") && Field<Process>(window, "_worker").Id == pairPid
+                                && File.ReadAllText(Path.Combine(profile, "modules", "module-state.json")) == savedPairState,
+                                "Duplicate Virtual Desktop consumers interrupted the live pair before validation.");
+                            Check(Named<TextBlock>(window, "GlobalNoticeText").Text.Contains("Virtual Desktop", StringComparison.Ordinal)
+                                && Named<Border>(window, "GlobalNotice").Visibility == Visibility.Visible,
+                                "Duplicate Virtual Desktop profiles lack an actionable conflict notice.");
+                        }
                         Apply(eye, blocked); CheckPair(eye, face, checkDraft: false);
                         Check(Field<bool>(window, "_running") && File.ReadAllText(Path.Combine(profile, "modules", "module-state.json")) == savedPairState,
                             "A module initialization failure did not restore the complete previous role pair.");
@@ -3560,7 +3651,14 @@ internal static class Program
         {
             var bounds = new Rect(0, 0, content.ActualWidth, content.ActualHeight);
             drawing.DrawRectangle(target.Background, null, bounds);
-            drawing.DrawRectangle(new VisualBrush(content) { Stretch = Stretch.None }, null, bounds);
+            // Default relative brush bounds include descendant drawing overflow.
+            // Explicit root coordinates prevent a centered/cropped narrow preview.
+            drawing.DrawRectangle(new VisualBrush(content)
+            {
+                ViewboxUnits = BrushMappingMode.Absolute, Viewbox = bounds,
+                ViewportUnits = BrushMappingMode.Absolute, Viewport = bounds,
+                Stretch = Stretch.Fill, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top
+            }, null, bounds);
         }
         image.Render(surface);
         var png = new PngBitmapEncoder();

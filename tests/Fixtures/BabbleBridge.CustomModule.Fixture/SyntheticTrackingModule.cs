@@ -21,6 +21,11 @@ public sealed class SyntheticTrackingModule : ExtTrackingModule, IFixtureDepende
         _mode = mode;
         if (File.Exists("fixture-values.json")) _values = JsonSerializer.Deserialize<Dictionary<string, float>>(File.ReadAllText("fixture-values.json"))!;
         File.WriteAllText("fixture-initialized.txt", Environment.ProcessId.ToString());
+        File.WriteAllText("fixture-requested-channels.json", JsonSerializer.Serialize(new { eye = eyeAvailable, face = expressionAvailable }));
+        if (mode == "exclusive-eyes" && expressionAvailable) throw new InvalidOperationException("The unused face runtime was incorrectly requested.");
+        if (mode == "exclusive-face" && eyeAvailable) throw new InvalidOperationException("The unused eye runtime was incorrectly requested.");
+        if (mode == "eyes-only") return (true, false);
+        if (mode == "face-only") return (false, true);
         if (mode == "unsupported-sdk") throw new MissingMethodException("Synthetic fixture requires VRCFaceTracking.FutureSdkApi().");
         if (mode == "missing-native") _ = MissingNativeFixture();
         if (mode == "no-tracking") return (false, false);

@@ -159,6 +159,8 @@ internal static class SplitModuleCoordinator
 
     private static void Preflight(ModuleInputSelection eye, ModuleInputSelection face, AppSettings settings)
     {
+        if (eye.Kind == ModuleKind.VirtualDesktop && face.Kind == ModuleKind.VirtualDesktop)
+            throw new InvalidOperationException("Use the same Virtual Desktop profile for both roles. Separate copies share one tracking event and can compete for updates; one profile runs one module instance.");
         if (string.Equals(Path.GetDirectoryName(eye.Path), Path.GetDirectoryName(face.Path), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Separate tracking modules need separate library profiles so their files and settings cannot conflict. Import each module into its own profile.");
         var listeners = Listeners(eye, settings).Select(endpoint => (Selection: eye, Endpoint: endpoint))
@@ -258,7 +260,7 @@ internal sealed class InputWorker(ModuleInputSelection selection, string role, s
                 if (Path.GetFileNameWithoutExtension(start.FileName).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
                     start.ArgumentList.Add(typeof(Program).Assembly.Location);
                 foreach (var argument in new[] { "--module", selection.Path, "--kind", selection.Kind.ToString(), "--module-name", selection.Name,
-                    "--data", dataRoot, "--input-only", "--no-discovery", "--parent", Environment.ProcessId.ToString() }) start.ArgumentList.Add(argument);
+                    "--data", dataRoot, "--input-only", "--input-role", role == "Eyes" ? "eyes" : "face", "--no-discovery", "--parent", Environment.ProcessId.ToString() }) start.ArgumentList.Add(argument);
                 if (selection.InputPort is { } port) { start.ArgumentList.Add("--input-port"); start.ArgumentList.Add(port.ToString()); }
                 child = Process.Start(start) ?? throw new InvalidOperationException("Input worker did not start.");
                 process = child;

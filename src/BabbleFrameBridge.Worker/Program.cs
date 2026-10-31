@@ -73,6 +73,11 @@ internal static partial class Program
             var moduleName = Arg("--module-name", provider.Name).Trim();
             if (moduleName.Length is 0 or > 200 || moduleName.Any(char.IsControl))
                 throw new ArgumentException("The module display name must be between 1 and 200 characters.");
+            var inputRole = Arg("--input-role", "both");
+            if (inputRole is not ("both" or "eyes" or "face") || Has("--input-role") && !Has("--input-only"))
+                throw new ArgumentException("An input role is valid only for an isolated input worker and must be eyes, face, or both.");
+            var requestEyes = inputRole != "face";
+            var requestFace = inputRole != "eyes";
             StartLifetimeWatchers(options, stop);
             if (!Has("--face-module") && (Has("--face-kind") || Has("--face-name") || Has("--face-input-port")))
                 throw new ArgumentException("Choose a face module before specifying its kind, name, or input port.");
@@ -117,9 +122,9 @@ internal static partial class Program
                 config["Port"] ??= 8888;
                 if (desktopSource)
                 {
-                    // Legacy ZIPs can default to face only; this profile owns both tracking channels.
-                    config["IsEyeSupported"] = true;
-                    config["IsFaceSupported"] = true;
+                    // Legacy ZIPs can default to face only. Request the assigned channels explicitly.
+                    config["IsEyeSupported"] = requestEyes;
+                    config["IsFaceSupported"] = requestFace;
                     if (explicitKind || Has("--input-port")) config["Port"] = inputPort;
                     else inputPort = config["Port"]!.GetValue<int>();
                 }
@@ -176,8 +181,14 @@ internal static partial class Program
                 moduleNeedsTeardown = kind != ModuleKind.SRanipal;
             }
             var claims = kind == ModuleKind.SRanipal
-                ? await InitializeSRanipal(module, stop.Token) : module.Initialize(true, true);
+                ? await InitializeSRanipal(module, requestEyes, requestFace, stop.Token) : module.Initialize(requestEyes, requestFace);
             moduleNeedsTeardown = true;
+            // Each isolated producer owns only its selected channel. Offering both
+            // would let a face module initialize the other provider's eye runtime.
+            // Some modules ignore the offers; never advertise their extra claims.
+            claims = (claims.eyeSuccess && requestEyes, claims.expressionSuccess && requestFace);
+            if (inputRole != "both" && !claims.eyeSuccess && !claims.expressionSuccess && !headsetSource)
+                throw new InvalidOperationException($"{moduleName} did not enable its selected {(requestEyes ? "eye" : "face")} role. Choose a module that supports that role and enable it in the module's tracking settings.");
             // A headset can have both channels disabled in its saved configuration. Its
             // live BFR Link still needs to negotiate the next headset session's claims.
             if (!claims.eyeSuccess && !claims.expressionSuccess && !headsetSource)
@@ -373,7 +384,7 @@ internal static partial class Program
         finally { foreach (var process in processes) process.Dispose(); }
     }
 
-    private static async Task<(bool eyeSuccess, bool expressionSuccess)> InitializeSRanipal(ExtTrackingModule module, CancellationToken token)
+    private static async Task<(bool eyeSuccess, bool expressionSuccess)> InitializeSRanipal(ExtTrackingModule module, bool requestEyes, bool requestFace, CancellationToken token)
     {
         string? previousMessage = null;
         while (true)
@@ -387,7 +398,7 @@ internal static partial class Program
                 else
                 {
                     attempted = true;
-                    var claims = module.Initialize(true, true);
+                    var claims = module.Initialize(requestEyes, requestFace);
                     if (claims.eyeSuccess || claims.expressionSuccess) return claims;
                     message = "Waiting for a VIVE tracker. SRanipal is running, but has not enabled eye or face tracking. Connect the device and finish its setup; the bridge will retry automatically.";
                 }
@@ -442,6 +453,7 @@ internal static partial class Program
                 case "--no-discovery": case "--all-parameters": case "--input-only": break;
                 case "--module": case "--data": case "--kind": case "--module-name":
                 case "--input-port": case "--output-port": case "--parent":
+                case "--input-role":
                 case "--face-module": case "--face-kind": case "--face-name": case "--face-input-port":
                     if (++index >= args.Length) throw new ArgumentException($"Missing value for {name}.");
                     value = args[index];

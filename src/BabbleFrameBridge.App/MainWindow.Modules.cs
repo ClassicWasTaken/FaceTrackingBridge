@@ -133,6 +133,8 @@ public partial class MainWindow
     {
         ValidateConnection(settings, eye);
         if (eye.Id == face.Id) return;
+        if (eye.Kind == ModuleKind.VirtualDesktop && face.Kind == ModuleKind.VirtualDesktop)
+            throw new InvalidOperationException("Use the same Virtual Desktop profile for both roles. Separate copies share one tracking event and can compete for updates; one profile runs one module instance.");
         ValidateConnection(settings, face);
         var overlap = ModuleInputPorts(eye).Intersect(ModuleInputPorts(face)).FirstOrDefault();
         if (overlap > 0) throw new InvalidOperationException($"These modules both listen on UDP {overlap}. Configure different input ports in their tracking apps and module settings before combining them.");

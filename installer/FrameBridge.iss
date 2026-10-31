@@ -7,7 +7,10 @@
   #define AppPayload "..\dist\BabbleFrameBridge"
 #endif
 #ifndef AppVersion
-  #define AppVersion "1.5.0"
+  #define AppVersion "1.1.0"
+#endif
+#ifndef ReleaseGeneration
+  #define ReleaseGeneration 4
 #endif
 #ifndef BuildIdentity
   #define BuildIdentity "FrameBridge.Desktop.8E250247-8BA9-42B7-A698-94D2A52E880A"
@@ -280,9 +283,9 @@ begin
       would silently lose the marker and permit a later downgrade. }
     if not RegWriteDWordValue(HKCU,
       'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#BuildIdentity}_is1',
-      'BabbleBridgeReleaseGeneration', 3) then
+      'BabbleBridgeReleaseGeneration', {#ReleaseGeneration}) then
       RaiseException('Setup could not record the public release generation. Run Setup again before installing another release.');
-    Log('Recorded public release generation 3 after saving uninstall information.');
+    Log('Recorded public release generation {#ReleaseGeneration} after saving uninstall information.');
     if {#MigrateLegacyShortcuts} = 1 then begin
       { Retire an old link only after its replacement was actually created.
         A name collision with another app must not remove the only owned link. }
@@ -392,10 +395,20 @@ begin
       HasReleaseGeneration := RegQueryDWordValue(HKCU,
         'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#BuildIdentity}_is1',
         'BabbleBridgeReleaseGeneration', ReleaseGeneration);
+      { The withdrawn public 1.5.0 build was renumbered to 1.1.0. Permit only
+        that exact product/version/generation to cross the numbering boundary.
+        Generation 4 records the completed migration, so it cannot be reused
+        for later 1.5.0 builds or any other numeric downgrade. }
+      if ('{#AppVersion}' = '1.1.0') and HasReleaseGeneration and
+        (ReleaseGeneration = 3) and (InstalledVersion = '1.5.0') and
+        (CompareText(InstalledName, 'Face Tracking Bridge') = 0) then begin
+        Log('Migrating the withdrawn Face Tracking Bridge 1.5.0 release to 1.1.0.');
+        Exit;
+      end;
       { The renamed project starts again at 1.0.0. Users may skip that first
         installer, so allow these exact public generation-2 installations to
         cross the numbering boundary throughout the public 1.0.x series.
-        After setup records generation 3, this exception no longer applies. }
+        Once setup records the current generation, this exception no longer applies. }
       if (Pos('1.0.', '{#AppVersion}') = 1) and HasReleaseGeneration and
         (ReleaseGeneration = 2) and
         IsKnownGenerationTwoBuild(InstalledVersion, InstalledName) then begin
