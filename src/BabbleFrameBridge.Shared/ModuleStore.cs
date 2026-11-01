@@ -46,6 +46,17 @@ public sealed class ModuleStore
     private readonly string _releasesRoot;
     private readonly string _statePath;
     private StoreState _state;
+    private readonly List<string> _recoveryIssues = [];
+    private string? _readOnlyReason;
+    private bool _preserveStateOnNextWrite;
+    private const int MaximumStateBytes = 1024 * 1024, MaximumSavedModules = 4096;
+    private const long MaximumPreservedStateBytes = 32L * 1024 * 1024;
+
+    public IReadOnlyList<string> RecoveryIssues { get { lock (_gate) return _recoveryIssues.ToArray(); } }
+    public bool IsReadOnly => _readOnlyReason is not null;
+    public string? ReadOnlyReason => _readOnlyReason;
+    public string? RecoveryNotice => _readOnlyReason ?? (_recoveryIssues.Count > 0
+        ? "Some saved modules need attention. Usable modules are available; existing files have been preserved." : null);
 
     public ModuleStore(string root)
     {
@@ -53,9 +64,17 @@ public sealed class ModuleStore
         _storeRoot = Path.Combine(Path.GetFullPath(root), "modules");
         _releasesRoot = Path.Combine(_storeRoot, "releases");
         _statePath = Path.Combine(_storeRoot, "module-state.json");
-        Directory.CreateDirectory(_releasesRoot);
+        try { Directory.CreateDirectory(_releasesRoot); }
+        catch (Exception error) when (IsRecoveryError(error))
+        {
+            _readOnlyReason = "The saved module library is read-only. Existing files have been preserved.";
+            AddRecoveryIssue("The module releases folder could not be opened for writing: " + error.Message);
+        }
         _state = ReadState();
-        CleanupRemovedReleases();
+        if (!IsReadOnly)
+            try { CleanupRemovedReleases(); }
+            catch (Exception error) when (IsRecoveryError(error))
+            { AddRecoveryIssue("Deferred module cleanup could not finish: " + error.Message); }
     }
 
     public ModuleRelease? Current { get { lock (_gate) return ReadRelease(_state.Current); } }
@@ -82,7 +101,7 @@ public sealed class ModuleStore
 
     private string[] InstalledIds() => (_state.Installed ?? [])
         .Concat(new[] { _state.Current, _state.Previous, EyeId, FaceId, PreviousEyeId, PreviousFaceId }.OfType<string>())
-        .Distinct().ToArray();
+        .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
     private static StoreState SelectionState(string? eyeId, string? faceId, string? previousEyeId,
         string? previousFaceId, IEnumerable<string> installed) => new(3, eyeId, previousEyeId,
@@ -93,6 +112,7 @@ public sealed class ModuleStore
     {
         lock (_gate)
         {
+            EnsureWritable();
             if (ReadRelease(release.Id) != release) throw new InvalidDataException("The module does not belong to this library.");
             var next = SelectionState(EyeId, FaceId, PreviousEyeId, PreviousFaceId, InstalledIds().Append(release.Id));
             WriteAtomic(_statePath, next); _state = next;
@@ -104,6 +124,7 @@ public sealed class ModuleStore
     {
         lock (_gate)
         {
+            EnsureWritable();
             if (ReadRelease(release.Id) != release || release.ModuleId != BaballoniaModuleId || !release.SupportsHeadset || !release.IsAvailable)
                 throw new InvalidDataException("This package does not support both Babble inputs.");
             var id = Guid.NewGuid().ToString("N");
@@ -130,25 +151,50 @@ public sealed class ModuleStore
     {
         lock (_gate)
         {
-            if (_state.Schema != 1) return;
+            if (_state.Schema != 1 || IsReadOnly) return;
             var ids = InstalledIds();
+            var incomplete = false;
             foreach (var id in ids)
             {
                 var release = ReadRelease(id)!;
-                var supports = release.IsAvailable && HasHeadsetSupport(Path.Combine(release.DirectoryPath, release.DllFileName));
-                release = release with { Kind = source == TrackingInputSource.BaballoniaDesktop ? ModuleKind.BaballoniaDesktop : ModuleKind.BabbleHeadsetRuntime, SupportsHeadset = supports };
-                WriteAtomic(Path.Combine(_releasesRoot, id, "release.json"), release);
+                // Old libraries can contain community/other headset modules.
+                // Reclassifying those as Baballonia would corrupt their identity.
+                if (release.ModuleId != BaballoniaModuleId || release.DllFileName != BaballoniaDll) continue;
+                var supports = false;
+                if (release.IsAvailable)
+                    try { supports = HasHeadsetSupport(Path.Combine(release.DirectoryPath, release.DllFileName)); }
+                    catch (Exception error) when (IsRecoveryError(error))
+                    { AddRecoveryIssue("Legacy module " + id + " could not be inspected; its files were preserved: " + error.Message); }
+                var migrated = release with { Kind = source == TrackingInputSource.BaballoniaDesktop ? ModuleKind.BaballoniaDesktop : ModuleKind.BabbleHeadsetRuntime, SupportsHeadset = supports };
+                if (migrated == release) continue;
+                try { EnsureWritable(); WriteAtomic(Path.Combine(_releasesRoot, id, "release.json"), migrated); }
+                catch (Exception error) when (IsRecoveryError(error))
+                {
+                    incomplete = true;
+                    // Do not auto-start a selected source using its old transport
+                    // when the source-mode conversion could not be committed.
+                    _state = _state with { Current = _state.Current == id ? null : _state.Current,
+                        Previous = _state.Previous == id ? null : _state.Previous, Installed = ids };
+                    AddRecoveryIssue("Legacy module " + id + " could not be migrated yet; select it again after its files are writable: " + error.Message);
+                }
             }
+            if (incomplete) return;
             var next = SelectionState(EyeId, FaceId, PreviousEyeId, PreviousFaceId, ids);
-            WriteAtomic(_statePath, next); _state = next;
-            if (Current is { SupportsHeadset: true, IsAvailable: true } current)
-                Register(CreateCompanion(current));
+            try
+            {
+                EnsureWritable(); WriteAtomic(_statePath, next); _state = next;
+                if (Current is { SupportsHeadset: true, IsAvailable: true } current)
+                    Register(CreateCompanion(current));
+            }
+            catch (Exception error) when (IsRecoveryError(error))
+            { AddRecoveryIssue("The legacy module library could not finish migrating yet. Existing profiles remain available: " + error.Message); }
         }
     }
 
     /// <summary>Stages a DLL or ZIP without loading module code or changing the selected module.</summary>
     public ModuleRelease Prepare(string path, ModuleKind? requestedKind = null)
     {
+        EnsureWritable();
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (requestedKind is { } requested) _ = ModuleCatalog.Get(requested);
         var bareDll = string.Equals(Path.GetExtension(path), ".dll", StringComparison.OrdinalIgnoreCase);
@@ -280,6 +326,7 @@ public sealed class ModuleStore
         ArgumentNullException.ThrowIfNull(release);
         lock (_gate)
         {
+            EnsureWritable();
             var stored = ReadRelease(release.Id) ?? throw new InvalidDataException("The prepared module no longer exists.");
             if (stored != release) throw new InvalidDataException("The prepared module does not belong to this store.");
             ValidateAssembly(Path.Combine(stored.DirectoryPath, stored.DllFileName), stored.Kind == ModuleKind.Custom ? stored.AssemblyName! : ModuleCatalog.Get(stored.Kind).AssemblyName);
@@ -300,6 +347,7 @@ public sealed class ModuleStore
         ArgumentNullException.ThrowIfNull(face);
         lock (_gate)
         {
+            EnsureWritable();
             ValidateRegisteredSelection(eye, face);
             if (EyeId == eye.Id && FaceId == face.Id) return;
             var next = SelectionState(eye.Id, face.Id, EyeId, FaceId, InstalledIds());
@@ -338,6 +386,7 @@ public sealed class ModuleStore
     {
         lock (_gate)
         {
+            EnsureWritable();
             var selection = ReadSelection(PreviousEyeId, PreviousFaceId);
             if (!selection.IsComplete) throw new InvalidOperationException("There is no previous module selection to restore.");
             ValidateRegisteredSelection(selection.EyeModule!, selection.FaceModule!);
@@ -354,6 +403,7 @@ public sealed class ModuleStore
         ArgumentNullException.ThrowIfNull(release);
         lock (_gate)
         {
+            EnsureWritable();
             var stored = ReadRelease(release.Id);
             if (stored != release || !InstalledIds().Contains(release.Id, StringComparer.Ordinal))
                 throw new InvalidDataException("The module does not belong to this library.");
@@ -506,43 +556,198 @@ public sealed class ModuleStore
     private StoreState ReadState()
     {
         if (!File.Exists(_statePath) && !File.Exists(_statePath + ".backup")) return new StoreState(1, null, null);
-        Exception? firstError = null;
+        // Notice future schemas before selecting a fallback. Even a readable
+        // older backup must not allow this app to overwrite a newer manifest.
+        foreach (var candidate in new[] { _statePath, _statePath + ".backup" })
+            if (File.Exists(candidate))
+                try
+                {
+                    if (new FileInfo(candidate).Length > MaximumPreservedStateBytes)
+                    {
+                        MarkOversizedStateReadOnly(candidate);
+                        continue;
+                    }
+                    using var document = JsonDocument.Parse(ReadBoundedMetadata(candidate));
+                    if (document.RootElement.ValueKind == JsonValueKind.Object)
+                        foreach (var property in document.RootElement.EnumerateObject())
+                            if (property.Name.Equals("Schema", StringComparison.OrdinalIgnoreCase)
+                                && property.Value.ValueKind == JsonValueKind.Number && property.Value.TryGetInt32(out var version)
+                                && version is not 1 and not 2 and not 3)
+                            {
+                                _readOnlyReason = "This module library was saved by another app version. Modules can be reviewed, but changes are disabled to preserve it.";
+                                AddRecoveryIssue("Unsupported saved module schema " + version + ": " + candidate);
+                            }
+                }
+                catch (Exception error) when (IsRecoveryError(error)) { }
         foreach (var path in new[] { _statePath, _statePath + ".backup" })
         {
             if (!File.Exists(path)) continue;
             try
             {
-                var state = JsonSerializer.Deserialize<StoreState>(File.ReadAllText(path), JsonOptions)
+                var state = JsonSerializer.Deserialize<StoreState>(ReadBoundedMetadata(path), JsonOptions)
                     ?? throw new InvalidDataException("Empty module state.");
                 if (state.Schema is not 1 and not 2 and not 3) throw new InvalidDataException("Unsupported module state version.");
-                _ = ReadRelease(state.Current);
-                _ = ReadRelease(state.Previous);
+                if (state.Installed?.Length > MaximumSavedModules) throw new InvalidDataException("The saved module list is too large.");
+                foreach (var id in new[] { state.Current, state.Previous, state.EyeModuleId, state.FaceModuleId, state.PreviousEyeId, state.PreviousFaceId })
+                    if (id is not null && !Guid.TryParseExact(id, "N", out _)) throw new InvalidDataException("Invalid selected module ID.");
                 if (state.Schema == 3)
                 {
                     if ((state.EyeModuleId is null) != (state.FaceModuleId is null)
                         || (state.PreviousEyeId is null) != (state.PreviousFaceId is null)
                         || state.Current != state.EyeModuleId || state.Previous != state.PreviousEyeId)
                         throw new InvalidDataException("The saved tracking role selection is inconsistent.");
-                    foreach (var id in new[] { state.EyeModuleId, state.FaceModuleId, state.PreviousEyeId, state.PreviousFaceId })
-                        _ = ReadRelease(id);
                 }
-                foreach (var id in state.Installed ?? []) _ = ReadRelease(id);
+                if (ReferencesPendingRemoval(state)) throw new InvalidDataException("An interrupted module removal requires its sanitized backup.");
+                var sanitized = QuarantineInvalidEntries(state);
                 // Repair the primary after recovery, so a later normal save cannot replace
                 // the valid backup with a corrupt or interrupted-removal manifest.
-                if (path != _statePath)
+                if (path != _statePath && !IsReadOnly)
                 {
-                    EnsureNoReparsePoint(Path.GetDirectoryName(_storeRoot)!);
-                    EnsureNoReparsePoint(_storeRoot);
-                    EnsureNoReparsePoint(_statePath);
-                    EnsureNoReparsePoint(_statePath + ".backup");
-                    WriteAtomic(_statePath, state, keepBackup: false);
+                    try { PreserveStateFiles(); WriteAtomic(_statePath, state, keepBackup: false); }
+                    catch (Exception error) when (IsRecoveryError(error))
+                    { AddRecoveryIssue("The saved backup is usable, but its primary state could not be repaired yet: " + error.Message); }
                 }
-                return state;
+                return sanitized;
             }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or ArgumentException)
-            { firstError ??= ex; }
+            catch (Exception error) when (IsRecoveryError(error))
+            { _preserveStateOnNextWrite = true; AddRecoveryIssue("Saved module state could not be read: " + path + ": " + error.Message); }
         }
-        throw new InvalidDataException("The saved module state cannot be read. Existing releases are preserved in the modules folder.", firstError);
+        // Both manifests may have been interrupted. Recover only independently
+        // validated profile metadata; never guess which source should start.
+        var recovered = new List<string>();
+        if (Directory.Exists(_releasesRoot))
+            try
+            {
+                foreach (var directory in Directory.EnumerateDirectories(_releasesRoot).Take(MaximumSavedModules))
+                {
+                    var id = Path.GetFileName(directory);
+                    if (!Guid.TryParseExact(id, "N", out _)) continue;
+                    try { EnsureNoReparsePoint(directory); if (ReadRelease(id) is not null) recovered.Add(id); }
+                    catch (Exception error) when (IsRecoveryError(error)) { AddRecoveryIssue("Module profile " + id + " needs repair: " + error.Message); }
+                }
+            }
+            catch (Exception error) when (IsRecoveryError(error)) { AddRecoveryIssue("Module profiles could not all be listed: " + error.Message); }
+        return SelectionState(null, null, null, null, recovered);
+    }
+
+    private StoreState QuarantineInvalidEntries(StoreState state)
+    {
+        var raw = (state.Installed ?? []).Concat(new[] { state.Current, state.Previous, state.EyeModuleId,
+            state.FaceModuleId, state.PreviousEyeId, state.PreviousFaceId }.OfType<string>())
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var valid = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in raw)
+            try
+            {
+                if (id is null || ReadRelease(id) is null) throw new InvalidDataException("An installed module ID is missing.");
+                valid.Add(id);
+            }
+            catch (Exception error) when (IsRecoveryError(error))
+            {
+                _preserveStateOnNextWrite = true;
+                AddRecoveryIssue("Module profile " + (id ?? "(missing ID)") + " was kept out of the active library; its files were preserved: " + error.Message);
+            }
+        bool Available(string? id) => id is not null && valid.Contains(id);
+        if (state.Schema < 3)
+            return state with { Current = Available(state.Current) ? state.Current : null,
+                Previous = Available(state.Previous) ? state.Previous : null, Installed = valid.ToArray() };
+        var selected = Available(state.EyeModuleId) && Available(state.FaceModuleId);
+        var previous = Available(state.PreviousEyeId) && Available(state.PreviousFaceId);
+        return state with
+        {
+            Current = selected ? state.Current : null, EyeModuleId = selected ? state.EyeModuleId : null, FaceModuleId = selected ? state.FaceModuleId : null,
+            Previous = previous ? state.Previous : null, PreviousEyeId = previous ? state.PreviousEyeId : null, PreviousFaceId = previous ? state.PreviousFaceId : null,
+            Installed = valid.ToArray()
+        };
+    }
+
+    private bool ReferencesPendingRemoval(StoreState state)
+    {
+        foreach (var id in (state.Installed ?? []).Concat(new[] { state.Current, state.Previous, state.EyeModuleId,
+            state.FaceModuleId, state.PreviousEyeId, state.PreviousFaceId }.OfType<string>()).Distinct())
+        {
+            if (!Guid.TryParseExact(id, "N", out _) || Directory.Exists(Path.Combine(_releasesRoot, id))) continue;
+            var removed = Path.Combine(_storeRoot, ".removed-" + id);
+            if (!Directory.Exists(removed)) continue;
+            try
+            {
+                EnsureNoReparsePoint(removed);
+                var metadata = JsonSerializer.Deserialize<ModuleRelease>(ReadBoundedMetadata(Path.Combine(removed, "release.json")), JsonOptions);
+                if (metadata?.Id == id) return true;
+            }
+            catch (Exception error) when (IsRecoveryError(error)) { }
+        }
+        return false;
+    }
+
+    private static byte[] ReadBoundedMetadata(string path)
+    {
+        using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (input.Length is <= 0 or > MaximumStateBytes) throw new InvalidDataException("The saved module metadata is empty or too large.");
+        var bytes = new byte[(int)input.Length]; input.ReadExactly(bytes); return bytes;
+    }
+
+    private void AddRecoveryIssue(string message)
+    {
+        if (_recoveryIssues.Count < 128 && !_recoveryIssues.Contains(message, StringComparer.Ordinal)) _recoveryIssues.Add(message);
+    }
+
+    private static bool IsRecoveryError(Exception error) => error is IOException or UnauthorizedAccessException or InvalidDataException
+        or JsonException or ArgumentException or BadImageFormatException or NotSupportedException or InvalidOperationException;
+
+    private void PreserveStateFiles()
+    {
+        EnsureNoReparsePoint(Path.GetDirectoryName(_storeRoot)!); EnsureNoReparsePoint(_storeRoot);
+        foreach (var path in new[] { _statePath, _statePath + ".backup" })
+        {
+            EnsureNoReparsePoint(path);
+            if (!File.Exists(path)) continue;
+            using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (input.Length > MaximumPreservedStateBytes)
+            {
+                MarkOversizedStateReadOnly(path);
+                throw new InvalidOperationException(_readOnlyReason);
+            }
+            var preserved = path + ".recovery-" + Guid.NewGuid().ToString("N");
+            // Preservation is a raw bounded copy, deliberately independent of
+            // JSON parsing. Empty/truncated/oversized-for-parsing files are the
+            // exact inputs that must remain recoverable before a repair.
+            try
+            {
+                using var output = new FileStream(preserved, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                    65536, FileOptions.WriteThrough);
+                var buffer = new byte[65536]; long copied = 0;
+                int count;
+                while ((count = input.Read(buffer)) > 0)
+                {
+                    if (count > MaximumPreservedStateBytes - copied)
+                    {
+                        MarkOversizedStateReadOnly(path);
+                        throw new InvalidOperationException(_readOnlyReason);
+                    }
+                    output.Write(buffer, 0, count); copied += count;
+                }
+                output.Flush(flushToDisk: true);
+            }
+            catch
+            {
+                try { File.Delete(preserved); } catch (Exception error) when (IsRecoveryError(error)) { }
+                throw;
+            }
+        }
+        _preserveStateOnNextWrite = false;
+    }
+
+    private void MarkOversizedStateReadOnly(string path)
+    {
+        _readOnlyReason = "A saved module manifest is too large to preserve automatically. The library is open read-only; existing files have been left untouched.";
+        AddRecoveryIssue("Saved module state exceeds the 32 MB recovery archive limit: " + path);
+    }
+
+    private void EnsureWritable()
+    {
+        if (_readOnlyReason is not null) throw new InvalidOperationException(_readOnlyReason);
+        if (_preserveStateOnNextWrite) PreserveStateFiles();
     }
 
     private ModuleRelease? ReadRelease(string? id)
@@ -550,22 +755,34 @@ public sealed class ModuleStore
         if (id is null) return null;
         if (!Guid.TryParseExact(id, "N", out _)) throw new InvalidDataException("Invalid saved release ID.");
         var releaseRoot = Path.Combine(_releasesRoot, id);
-        var release = JsonSerializer.Deserialize<ModuleRelease>(File.ReadAllText(Path.Combine(releaseRoot, "release.json")), JsonOptions)
+        var release = JsonSerializer.Deserialize<ModuleRelease>(ReadBoundedMetadata(Path.Combine(releaseRoot, "release.json")), JsonOptions)
             ?? throw new InvalidDataException("Empty saved release.");
         var payloadRoot = Path.Combine(releaseRoot, "payload");
         var directory = Path.GetFullPath(release.DirectoryPath);
         var definition = ModuleCatalog.Get(release.Kind);
         var custom = release.Kind == ModuleKind.Custom;
         _ = ValidateDllFileName(release.DllFileName);
-        if (release.Id != id || !Guid.TryParse(release.ModuleId, out _)
+        if (string.IsNullOrWhiteSpace(release.Version) || release.Version.Length > 80 || release.Version.Any(char.IsControl)
+            || string.IsNullOrWhiteSpace(release.ModuleName) || release.ModuleName.Length > 200 || release.ModuleName.Any(char.IsControl)
+            || release.Sha256 is not { Length: 64 } || release.Sha256.Any(value => !Uri.IsHexDigit(value)))
+            throw new InvalidDataException("The saved module display or checksum metadata is invalid.");
+        if (!string.Equals(release.Id, id, StringComparison.OrdinalIgnoreCase) || !Guid.TryParse(release.ModuleId, out _)
             || !custom && (release.ModuleId != definition.ModuleId || release.DllFileName != definition.DllFileName
                 || release.AssemblyName != null && release.AssemblyName != definition.AssemblyName)
-            || custom && (string.IsNullOrWhiteSpace(release.AssemblyName) || release.AssemblyName.Length > 200 || release.AssemblyName.Any(char.IsControl))
+            || custom && release.AssemblyName is not null && (string.IsNullOrWhiteSpace(release.AssemblyName) || release.AssemblyName.Length > 200 || release.AssemblyName.Any(char.IsControl))
             ||
             !(directory.Equals(payloadRoot, StringComparison.OrdinalIgnoreCase) || directory.StartsWith(payloadRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("The saved module release is invalid or missing.");
         if (custom)
         {
+            // These providers were once ordinary custom DLL imports. A later
+            // catalog must not make that previously valid profile poison the
+            // entire library. Confirm the original metadata-derived identity;
+            // never load module code or trust a claimed catalog name alone.
+            var promoted = PromoteLegacyCatalogProfile(release);
+            if (promoted is not null) return promoted;
+            if (string.IsNullOrWhiteSpace(release.AssemblyName))
+                throw new InvalidDataException("The saved custom assembly identity is missing.");
             if (ModuleCatalog.Identify(release.ModuleId, release.DllFileName).Kind != ModuleKind.Custom
                 || ModuleCatalog.All.Any(x => x.AssemblyName == release.AssemblyName))
                 throw new InvalidDataException("The saved custom module conflicts with a known module identity.");
@@ -574,6 +791,22 @@ public sealed class ModuleStore
             // activation and role selection validate its binary before commit.
         }
         return release;
+    }
+
+    private static ModuleRelease? PromoteLegacyCatalogProfile(ModuleRelease release)
+    {
+        var known = ModuleCatalog.All.FirstOrDefault(definition => definition.Kind is ModuleKind.EyeTrackVR or ModuleKind.Beyond or ModuleKind.SRanipal
+            && string.Equals(definition.DllFileName, release.DllFileName, StringComparison.OrdinalIgnoreCase));
+        if (known is null) return null;
+        var identity = ReadAssemblyIdentity(Path.Combine(release.DirectoryPath, release.DllFileName));
+        if (identity.Name != known.AssemblyName || !identity.TrackingModule
+            || release.AssemblyName is not null && release.AssemblyName != identity.Name)
+            throw new InvalidDataException("The older custom module does not match its known entry assembly.");
+        var legacyId = Guid.ParseExact(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("BabbleBridge.Module|" + identity.StableIdentity)))[..32], "N");
+        var savedId = Guid.Parse(release.ModuleId);
+        if (savedId != legacyId && savedId != Guid.Parse(known.ModuleId))
+            throw new InvalidDataException("The older custom module ID does not match its original assembly identity.");
+        return release with { Kind = known.Kind, ModuleId = known.ModuleId, DllFileName = known.DllFileName, AssemblyName = known.AssemblyName };
     }
 
     private static string ValidateArchivePath(ZipArchiveEntry entry)

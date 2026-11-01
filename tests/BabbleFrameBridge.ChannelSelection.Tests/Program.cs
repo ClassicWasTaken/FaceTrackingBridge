@@ -256,6 +256,20 @@ try
         Check(!store.PreviousSelection.IsComplete, "Removing the damaged rollback source retained a partial previous pair.");
     });
 
+    Test("a damaged inactive release manifest cannot stop healthy selected sources from opening", () =>
+    {
+        var (profile, store, eye, face, other) = Library("startup-damaged-inactive");
+        store.SelectChannels(eye, face);
+        var metadata = Path.Combine(profile, "modules", "releases", other.Id, "release.json");
+        File.WriteAllText(metadata, "{interrupted metadata");
+        var state = StateBytes(profile);
+        var reopened = new ModuleStore(profile);
+        CheckPair(reopened, eye, face);
+        Check(reopened.Installed.Count == 2, "A damaged inactive entry blocked healthy profiles or remained activatable.");
+        Check(File.ReadAllText(metadata) == "{interrupted metadata" && StateBytes(profile).SequenceEqual(state),
+            "Startup deleted or rewrote the damaged entry instead of preserving it for recovery.");
+    });
+
     Test("corrupt payload recovery retains strict custom metadata identity and path checks", () =>
     {
         var (profile, store, eye, face, other) = Library("corrupt-metadata");
@@ -264,12 +278,153 @@ try
         var metadataPath = Path.Combine(profile, "modules", "releases", other.Id, "release.json");
         var metadata = File.ReadAllText(metadataPath);
         File.WriteAllText(metadataPath, JsonSerializer.Serialize(other with { DirectoryPath = root }));
-        ExpectFailure(() => new ModuleStore(profile));
+        var quarantined = new ModuleStore(profile);
+        CheckPair(quarantined, eye, face);
+        Check(quarantined.Installed.All(module => module.Id != other.Id) && quarantined.RecoveryIssues.Count > 0,
+            "A forged path was exposed as an activatable module or blocked healthy sources.");
+        ExpectFailure(() => quarantined.Activate(other));
         File.WriteAllText(metadataPath, JsonSerializer.Serialize(other with { AssemblyName = "VRCFaceTracking.Baballonia" }));
-        ExpectFailure(() => new ModuleStore(profile));
+        quarantined = new ModuleStore(profile);
+        CheckPair(quarantined, eye, face);
+        Check(quarantined.Installed.All(module => module.Id != other.Id), "A forged known assembly identity was exposed as a custom module.");
+        ExpectFailure(() => quarantined.Activate(other));
         File.WriteAllText(metadataPath, metadata);
         CheckPair(new ModuleStore(profile), eye, face);
     });
+
+    Test("mixed invalid metadata is quarantined independently without changing healthy selections or user files", () =>
+    {
+        var cases = new Dictionary<string, Func<ModuleRelease, string>>
+        {
+            ["invalid-json"] = _ => "{broken",
+            ["null-directory"] = release => JsonSerializer.Serialize(release with { DirectoryPath = null! }),
+            ["unknown-kind"] = release => JsonSerializer.Serialize(release with { Kind = (ModuleKind)999 }),
+            ["null-name"] = release => JsonSerializer.Serialize(release with { ModuleName = null! }),
+            ["null-version"] = release => JsonSerializer.Serialize(release with { Version = null! }),
+            ["bad-checksum"] = release => JsonSerializer.Serialize(release with { Sha256 = "invalid" }),
+            ["wrong-identity"] = release => JsonSerializer.Serialize(release with { ModuleId = "not-a-guid" }),
+            ["oversized"] = _ => new string('x', 1024 * 1024 + 1)
+        };
+        foreach (var (name, mutate) in cases)
+        {
+            var (profile, store, eye, face, other) = Library("startup-mixed-" + name);
+            store.SelectChannels(eye, face);
+            var path = Path.Combine(profile, "modules", "releases", other.Id, "release.json");
+            var damaged = mutate(other); File.WriteAllText(path, damaged);
+            var state = StateBytes(profile); var backup = File.ReadAllBytes(StatePath(profile) + ".backup");
+            var reopened = new ModuleStore(profile);
+            CheckPair(reopened, eye, face);
+            Check(reopened.Installed.Count == 2 && reopened.RecoveryIssues.Count > 0 && !reopened.IsReadOnly,
+                "A single unusable profile disabled or poisoned the entire library: " + name);
+            Check(File.ReadAllText(path) == damaged && StateBytes(profile).SequenceEqual(state)
+                && File.ReadAllBytes(StatePath(profile) + ".backup").SequenceEqual(backup),
+                "Startup modified user files while isolating a damaged profile: " + name);
+        }
+    });
+
+    Test("missing selected metadata stops only that pair and repair restores its original saved assignments", () =>
+    {
+        var (profile, store, eye, face, other) = Library("startup-selected-metadata");
+        store.SelectChannels(eye, face);
+        var path = Path.Combine(profile, "modules", "releases", face.Id, "release.json");
+        var metadata = File.ReadAllBytes(path); File.Delete(path);
+        var before = StateBytes(profile);
+        var reopened = new ModuleStore(profile);
+        CheckEmptySelection(reopened);
+        Check(reopened.Installed.Count == 2 && reopened.Installed.Any(module => module.Id == other.Id),
+            "A missing selected manifest discarded unaffected profiles.");
+        Check(before.SequenceEqual(StateBytes(profile)), "Startup silently persisted a replacement selection.");
+        File.WriteAllBytes(path, metadata);
+        CheckPair(new ModuleStore(profile), eye, face);
+    });
+
+    Test("future library schemas stay read-only while their known backup remains usable", () =>
+    {
+        var (profile, store, eye, face, other) = Library("startup-future-schema");
+        store.SelectChannels(eye, face);
+        File.WriteAllBytes(StatePath(profile) + ".backup", StateBytes(profile));
+        const string future = "{\"Schema\":99,\"FutureLibraryData\":\"preserve this\"}";
+        File.WriteAllText(StatePath(profile), future);
+        var backup = File.ReadAllBytes(StatePath(profile) + ".backup");
+        var reopened = new ModuleStore(profile);
+        CheckPair(reopened, eye, face);
+        Check(reopened.IsReadOnly && reopened.ReadOnlyReason is not null && reopened.RecoveryNotice is not null,
+            "An unknown future library was opened for destructive writes.");
+        ExpectFailure(() => reopened.Register(other)); ExpectFailure(() => reopened.Prepare(fixture));
+        ExpectFailure(() => reopened.Activate(other)); ExpectFailure(() => reopened.SelectChannels(eye, other));
+        ExpectFailure(() => reopened.RestorePreviousChannels()); ExpectFailure(() => reopened.Remove(other));
+        reopened.MigrateLegacyProfiles(TrackingInputSource.BaballoniaDesktop);
+        Check(File.ReadAllText(StatePath(profile)) == future && backup.SequenceEqual(File.ReadAllBytes(StatePath(profile) + ".backup")),
+            "Reviewing or changing a future library overwrote its state or known backup.");
+    });
+
+    Test("an empty primary recovers its valid backup and remains repairable without reinstalling", () =>
+    {
+        var (profile, store, eye, face, other) = Library("startup-empty-primary"); store.SelectChannels(eye, face);
+        File.WriteAllBytes(StatePath(profile) + ".backup", StateBytes(profile)); File.WriteAllBytes(StatePath(profile), []);
+        var reopened = new ModuleStore(profile); CheckPair(reopened, eye, face);
+        reopened.SelectChannels(eye, other);
+        CheckPair(new ModuleStore(profile), eye, other);
+        Check(Directory.GetFiles(Path.Combine(profile, "modules"), "module-state.json.recovery-*").Any(path => new FileInfo(path).Length == 0),
+            "The empty original was not preserved before repair.");
+    });
+
+    Test("a corrupt manifest larger than its parse limit can still be preserved and explicitly repaired", () =>
+    {
+        var (profile, store, eye, face, _) = Library("startup-large-invalid-primary"); store.SelectChannels(eye, face);
+        var damaged = Enumerable.Repeat((byte)'x', 1024 * 1024 + 37).ToArray();
+        File.WriteAllBytes(StatePath(profile), damaged); File.WriteAllText(StatePath(profile) + ".backup", "{broken backup");
+        var reopened = new ModuleStore(profile); CheckEmptySelection(reopened);
+        Check(reopened.Installed.Count == 3, "A large invalid state discarded independently valid profiles.");
+        reopened.SelectChannels(eye, face);
+        CheckPair(new ModuleStore(profile), eye, face);
+        Check(Directory.GetFiles(Path.Combine(profile, "modules"), "module-state.json.recovery-*").Any(path => File.ReadAllBytes(path).SequenceEqual(damaged)),
+            "Repair did not preserve the oversized malformed original byte-for-byte.");
+    });
+
+    Test("a manifest beyond the archive limit remains untouched and opens the known backup read-only", () =>
+    {
+        var (profile, store, eye, face, other) = Library("startup-too-large-to-preserve"); store.SelectChannels(eye, face);
+        File.WriteAllBytes(StatePath(profile) + ".backup", StateBytes(profile));
+        using (var large = new FileStream(StatePath(profile), FileMode.Create, FileAccess.Write)) large.SetLength(32L * 1024 * 1024 + 1);
+        var backup = File.ReadAllBytes(StatePath(profile) + ".backup");
+        var reopened = new ModuleStore(profile); CheckPair(reopened, eye, face);
+        Check(reopened.IsReadOnly && reopened.RecoveryIssues.Count > 0, "An unpreservable state was exposed to overwriting mutations.");
+        ExpectFailure(() => reopened.SelectChannels(eye, other)); ExpectFailure(() => reopened.Prepare(fixture));
+        Check(new FileInfo(StatePath(profile)).Length == 32L * 1024 * 1024 + 1
+            && File.ReadAllBytes(StatePath(profile) + ".backup").SequenceEqual(backup), "Read-only recovery modified the oversized original or backup.");
+    });
+
+    Test("unreadable state files recover healthy profile metadata without guessing an active module", () =>
+    {
+        var (profile, store, eye, face, other) = Library("startup-both-state-corrupt");
+        store.SelectChannels(eye, face);
+        File.WriteAllText(StatePath(profile), "{broken primary"); File.WriteAllText(StatePath(profile) + ".backup", "{broken backup");
+        var reopened = new ModuleStore(profile);
+        CheckEmptySelection(reopened);
+        Check(reopened.Installed.Count == 3 && reopened.RecoveryIssues.Count > 0,
+            "Independently valid profiles were lost because both manifests were damaged.");
+        Check(File.ReadAllText(StatePath(profile)) == "{broken primary" && File.ReadAllText(StatePath(profile) + ".backup") == "{broken backup",
+            "Opening damaged state deleted recoverable user files.");
+        reopened.SelectChannels(eye, face);
+        CheckPair(new ModuleStore(profile), eye, face);
+        var preserved = Directory.GetFiles(Path.Combine(profile, "modules"), "module-state.json*.recovery-*");
+        Check(preserved.Any(path => File.ReadAllText(path) == "{broken primary")
+            && preserved.Any(path => File.ReadAllText(path) == "{broken backup"), "The first explicit repair did not preserve both unreadable originals.");
+    });
+
+    if (OperatingSystem.IsWindows())
+        Test("a locked inactive manifest cannot stop the healthy pair from reopening", () =>
+        {
+            var (profile, store, eye, face, other) = Library("startup-locked-metadata"); store.SelectChannels(eye, face);
+            var path = Path.Combine(profile, "modules", "releases", other.Id, "release.json");
+            using (var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var reopened = new ModuleStore(profile); CheckPair(reopened, eye, face);
+                Check(reopened.Installed.Count == 2 && reopened.RecoveryIssues.Count > 0, "A locked inactive entry blocked startup.");
+            }
+            Check(new ModuleStore(profile).Installed.Count == 3, "A temporary lock permanently removed a profile.");
+        });
 
     Test("single-module Install and rollback remain compatible", () =>
     {

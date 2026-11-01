@@ -25,8 +25,8 @@ public readonly record struct KittyObservation(double Energy, double Sleepiness,
 
 /// <summary>
 /// Original trained causal Transformer: 22 observation features, a rolling
-/// 32-token context, two pre-normalized six-head attention blocks of width96,
-/// and separate 35-behavior /5-attention heads. The 155,848 trained float32
+/// 32-token context, two pre-normalized eight-head attention blocks of width256,
+/// and separate 35-behavior /5-attention heads. The 1,070,888 trained float32
 /// parameters use no cloud, downloads, raw event recordings, language model, or runtime
 /// dependency. This is a small behavior simulation, not conscious thought.
 /// Reproduce with tools/train_kitty_policy.py (development dependencies only).
@@ -34,8 +34,8 @@ public readonly record struct KittyObservation(double Energy, double Sleepiness,
 public sealed class KittyBrain
 {
     public const int ActionCount = 35, AttentionCount = 5, InputCount = 22;
-    public const int ContextLength = 32, ModelWidth = 96, HeadCount = 6, FeedForwardWidth = 192, LayerCount = 2;
-    public const int ParameterCount = 155848;
+    public const int ContextLength = 32, ModelWidth = 256, HeadCount = 8, FeedForwardWidth = 512, LayerCount = 2;
+    public const int ParameterCount = 1070888;
     private readonly float[] _history = new float[ContextLength * InputCount];
     private readonly double[] _attention = new double[AttentionCount];
     private readonly KittyTransformer _transformer = new();
@@ -87,6 +87,12 @@ public sealed class KittyBrain
     public void Predict(KittyObservation o, Span<double> probabilities)
     {
         if (probabilities.Length < ActionCount) throw new ArgumentException("The policy needs 35 output slots.", nameof(probabilities));
+        Observe(o);
+        _transformer.Evaluate(SequenceHistory, _historyCount, probabilities[..ActionCount], _attention);
+    }
+
+    internal void Observe(KittyObservation o)
+    {
         if (_historyCount == ContextLength)
         {
             _history.AsSpan(InputCount).CopyTo(_history);
@@ -99,7 +105,6 @@ public sealed class KittyBrain
             o.Novelty,o.SocialNeed,o.Startle,o.PlayMemory,o.RestMemory,o.ContactMemory,o.Completion };
         for (var i = 0; i < input.Length; i++) token[i] = (float)(Unit(input[i]) * 2 - 1);
         _historyCount++;
-        _transformer.Evaluate(SequenceHistory, _historyCount, probabilities[..ActionCount], _attention);
     }
     internal static double Unit(double value) => double.IsFinite(value) ? Math.Clamp(value,0,1) : 0;
 }
@@ -121,6 +126,21 @@ public sealed class KittyMind
     private bool _needsComfort, _pickupActive;
     private readonly double[] _cooldowns = new double[KittyBrain.ActionCount];
     private readonly double[] _policy = new double[KittyBrain.ActionCount];
+    private readonly double[] _basePolicy = new double[KittyBrain.ActionCount];
+    private readonly double[] _baseAttention = new double[KittyBrain.AttentionCount];
+    private readonly double[] _attentionPolicy = new double[KittyBrain.AttentionCount];
+    private readonly double[] _policyBiases = new double[KittyBrain.ActionCount + KittyBrain.AttentionCount];
+    private double _feedbackAmount, _lastLearningAt = double.NegativeInfinity, _lastValidPolicyAt = double.NegativeInfinity;
+    private bool _hasValidPolicy;
+    private readonly bool _backgroundInference;
+    private readonly KittyTransformer? _backgroundTransformer;
+    private readonly Action? _backgroundWork;
+    private readonly float[] _jobContext = new float[KittyBrain.ContextLength * KittyBrain.InputCount];
+    private readonly double[] _jobPolicy = new double[KittyBrain.ActionCount], _jobAttention = new double[KittyBrain.AttentionCount];
+    private Task? _policyTask;
+    private int _jobLength, _policyGeneration, _jobGeneration;
+    private double _jobRequestedAt, _jobMilliseconds;
+    private string? _jobError;
     private readonly double[] _preferences = new double[KittyBrain.ActionCount];
     private readonly double[] _routineCooldowns = new double[7];
     private readonly Queue<KittyAction> _recent = new();
@@ -166,6 +186,16 @@ public sealed class KittyMind
     public double GazeInterest => Attention==KittyAttention.Cursor ? (.35+.65*Curiosity)*(1-Habituation*.7) : .55;
     public int DecisionCount { get; private set; }
     public int InferenceCount { get; private set; }
+    public int AcceptedInferenceCount { get; private set; }
+    public int DroppedInferenceCount { get; private set; }
+    public bool BackgroundInference => _backgroundInference;
+    public bool IsInferenceRunning => _policyTask is { IsCompleted: false };
+    public double LastInferenceMilliseconds { get; private set; }
+    public string? PolicyError { get; private set; }
+    public long LearningUpdates { get; private set; }
+    internal ReadOnlySpan<double> PolicyBiases => _policyBiases;
+    internal ReadOnlySpan<double> BehaviorProbabilities => _policy;
+    internal Action? BeforeBackgroundInference { get; set; }
     public double MemoryActivity => _brain.MemoryActivity;
     public string Intention => Action switch {
         KittyAction.Stalk => "Stay low and watch before a pounce.",
@@ -195,8 +225,10 @@ public sealed class KittyMind
     };
     public string Thought => Intention;
 
-    public KittyMind(int? seed=null)
+    public KittyMind(int? seed=null, bool backgroundInference=false)
     {
+        _backgroundInference = backgroundInference;
+        if (backgroundInference) { _backgroundTransformer = new(); _backgroundWork = RunBackgroundInference; }
         _identitySeed = seed is 0 ? int.MinValue : seed ?? Random.Shared.Next(1, int.MaxValue);
         _random=new Random(_identitySeed);
         Curiosity=Range(.52,.72); Trust=Range(.58,.76); SocialNeed=Range(.3,.5);
@@ -261,6 +293,7 @@ public sealed class KittyMind
             { Remember(KittyCoreMemoryKind.ComfortAfterStartle, .35); _needsComfort = false; _comfortContactSeconds = 0; }
         }
         _contactMemory = 1; _idleSeconds = 0; _reconsider = true;
+        LearnPositiveFeedback(amount);
     }
 
     public void OnPickup()
@@ -274,6 +307,92 @@ public sealed class KittyMind
         Remember(KittyCoreMemoryKind.CalmPickup, .3);
         Trust = KittyBrain.Unit(Trust + .006); Affection = KittyBrain.Unit(Affection + .004);
         _contactMemory = 1; Prefer(KittyAction.Loaf, .002);
+        LearnPositiveFeedback(Math.Min(1, (_timeSeconds - _pickupAt) * .2));
+    }
+
+    // The backbone stays fixed. These 40 bounded, local head-bias weights use
+    // actual SGD on calm positive interaction feedback, never a poke penalty.
+    private void LearnPositiveFeedback(double amount)
+    {
+        if (!_hasValidPolicy || _timeSeconds - _lastValidPolicyAt > .75 || Irritation >= .45
+            || Action is KittyAction.Grumpy or KittyAction.Backoff or KittyAction.Startle) return;
+        _feedbackAmount = Math.Min(1, _feedbackAmount + amount);
+        if (_feedbackAmount < .5 || _timeSeconds - _lastLearningAt < 1) return;
+        var rate = .02 * _feedbackAmount;
+        _feedbackAmount = 0; _lastLearningAt = _timeSeconds;
+        for (var index = 0; index < KittyBrain.ActionCount; index++)
+            _policyBiases[index] = Math.Clamp(_policyBiases[index] + rate * ((index == (int)Action ? 1 : 0) - _policy[index]), -.8, .8);
+        for (var index = 0; index < KittyBrain.AttentionCount; index++)
+        {
+            var slot = KittyBrain.ActionCount + index;
+            _policyBiases[slot] = Math.Clamp(_policyBiases[slot] + rate * ((index == (int)Attention ? 1 : 0) - _attentionPolicy[index]), -.8, .8);
+        }
+        LearningUpdates = Math.Min(1_000_000_000, LearningUpdates + 1);
+        ApplyPersonalPolicy();
+    }
+
+    private void ApplyPersonalPolicy()
+    {
+        static void Adapt(ReadOnlySpan<double> input, ReadOnlySpan<double> bias, Span<double> output)
+        {
+            double sum = 0;
+            for (var index = 0; index < output.Length; index++) sum += output[index] = input[index] * Math.Exp(bias[index]);
+            if (sum > 0 && double.IsFinite(sum))
+                for (var index = 0; index < output.Length; index++) output[index] /= sum;
+        }
+        Adapt(_basePolicy, _policyBiases.AsSpan(0, KittyBrain.ActionCount), _policy);
+        Adapt(_baseAttention, _policyBiases.AsSpan(KittyBrain.ActionCount), _attentionPolicy);
+    }
+
+    /// <summary>Discard a pending result when hidden, forgotten, or reloaded; never waits for a worker.</summary>
+    public void InvalidatePendingInference()
+    { _policyGeneration++; _modelReady = false; _policyClock = 0; }
+
+    private void RunBackgroundInference()
+    {
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            BeforeBackgroundInference?.Invoke();
+            _backgroundTransformer!.Evaluate(_jobContext.AsSpan(0, _jobLength * KittyBrain.InputCount), _jobLength, _jobPolicy, _jobAttention);
+        }
+        catch (Exception error) { _jobError = error.GetBaseException().Message; }
+        finally { _jobMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds; }
+    }
+
+    private void CollectBackgroundInference()
+    {
+        if (_policyTask is not { IsCompleted: true } completed) return;
+        _policyTask = null;
+        // Observe faults even for an injected/failed scheduler; the ordinary
+        // worker catches errors itself so forgetting an instance is safe too.
+        if (completed.IsFaulted) { PolicyError = completed.Exception!.GetBaseException().Message; return; }
+        if (completed.IsCanceled) return;
+        if (_jobGeneration != _policyGeneration || _timeSeconds - _jobRequestedAt > .75)
+        { DroppedInferenceCount++; return; }
+        if (_jobError is { } error) { PolicyError = error; return; }
+        Array.Copy(_jobPolicy, _basePolicy, _basePolicy.Length); Array.Copy(_jobAttention, _baseAttention, _baseAttention.Length);
+        _hasValidPolicy = true; _lastValidPolicyAt = _jobRequestedAt; PolicyError = null; LastInferenceMilliseconds = _jobMilliseconds;
+        AcceptedInferenceCount++; ApplyPersonalPolicy();
+    }
+
+    private void SamplePolicy()
+    {
+        if (!_backgroundInference)
+        {
+            var start = System.Diagnostics.Stopwatch.GetTimestamp();
+            _brain.Predict(Observation, _basePolicy); _brain.AttentionProbabilities.CopyTo(_baseAttention);
+            LastInferenceMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            _hasValidPolicy = true; _lastValidPolicyAt = _timeSeconds; AcceptedInferenceCount++; InferenceCount++; ApplyPersonalPolicy();
+            return;
+        }
+        // Context belongs to the UI/controller thread. One worker receives an
+        // immutable snapshot, with no request queue or writes to live memory.
+        _brain.Observe(Observation);
+        if (_policyTask is not null) return;
+        _brain.SequenceHistory.CopyTo(_jobContext); _jobLength = _brain.HistoryCount;
+        _jobGeneration = _policyGeneration; _jobRequestedAt = _timeSeconds; _jobError = null;
+        _policyTask = Task.Run(_backgroundWork!); InferenceCount++;
     }
 
     private double CoreStrength(KittyCoreMemoryKind kind) => _coreMemories.FirstOrDefault(memory => memory.Kind == kind)?.Strength ?? 0;
@@ -305,7 +424,8 @@ public sealed class KittyMind
         PlayMemory = _playMemory, RestMemory = _restMemory, ContactMemory = _contactMemory,
         Preferences = (double[])_preferences.Clone(), Context = _brain.ExportContext(), IdentitySeed = _identitySeed,
         Playfulness = Playfulness, Sociability = Sociability, Caution = Caution, Bond = Bond,
-        PositiveContactSeconds = _positiveContactSeconds, CoreMemories = _coreMemories.ToArray()
+        PositiveContactSeconds = _positiveContactSeconds, CoreMemories = _coreMemories.ToArray(),
+        PolicyBiases = (double[])_policyBiases.Clone(), LearningUpdates = LearningUpdates
     };
 
     public void RestoreMemory(KittyMemory memory)
@@ -333,7 +453,13 @@ public sealed class KittyMind
         if (memory.Preferences is { Length: KittyBrain.ActionCount } preferences)
             for (var index = 0; index < _preferences.Length; index++)
                 _preferences[index] = double.IsFinite(preferences[index]) ? Math.Clamp(preferences[index], .5, 1.5) : 1;
-        _brain.RestoreContext(memory.Context); _modelReady = false; _policyClock = 0;
+        Array.Clear(_policyBiases);
+        if (memory.PolicyBiases is { Length: KittyBrain.ActionCount + KittyBrain.AttentionCount } biases)
+            for (var index = 0; index < biases.Length; index++) _policyBiases[index] = double.IsFinite(biases[index]) ? Math.Clamp(biases[index], -.8, .8) : 0;
+        LearningUpdates = Math.Clamp(memory.LearningUpdates, 0, 1_000_000_000);
+        _feedbackAmount = 0; _lastLearningAt = _timeSeconds;
+        _brain.RestoreContext(memory.Context); InvalidatePendingInference(); _hasValidPolicy = false;
+        Array.Clear(_basePolicy); Array.Clear(_baseAttention); Array.Clear(_policy); Array.Clear(_attentionPolicy);
         if (memory.Sessions > 0 && memory.SavedAtUtc is { } saved && DateTimeOffset.UtcNow - saved > TimeSpan.FromMinutes(10)
             && (_positiveContactSeconds > 0 || _coreMemories.Count > 0)) Remember(KittyCoreMemoryKind.Reunion, .25);
     }
@@ -343,6 +469,7 @@ public sealed class KittyMind
         if(!double.IsFinite(deltaSeconds) || deltaSeconds<0) return;
         var dt=Math.Min(deltaSeconds,.5);
         _timeSeconds += dt;
+        CollectBackgroundInference();
         var next=new KittyStimulus(KittyBrain.Unit(stimulus.CursorNear),KittyBrain.Unit(stimulus.CursorMotion),
             KittyBrain.Unit(stimulus.PanelNear),KittyBrain.Unit(stimulus.Novelty),KittyBrain.Unit(stimulus.UserPresence));
         var change=Math.Abs(next.CursorNear-_stimulus.CursorNear)+Math.Abs(next.CursorMotion-_stimulus.CursorMotion);
@@ -397,7 +524,7 @@ public sealed class KittyMind
         ActionAge+=dt; AttentionAge+=dt; _policyClock+=dt; _episodeAge+=dt;
         if(_policyClock>=.2 || !_modelReady)
         {
-            _brain.Predict(Observation,_policy); _policyClock%=.2; _modelReady=true; InferenceCount++;
+            SamplePolicy(); _policyClock%=.2; _modelReady=true;
         }
         var urgent=Routine!=KittyRoutine.Recovery && (Irritation>.72 || _startle>.6) && ActionAge>.4;
         var wake=_reconsider && Action is KittyAction.Sleep or KittyAction.Doze && ActionAge>.4;
@@ -436,7 +563,10 @@ public sealed class KittyMind
         {
             var action=(KittyAction)i;
             var repeats=_recent.Count(a=>a==action);
-            var score=Math.Pow(_policy[i],1.25)*_preferences[i]*Math.Pow(.38,repeats);
+            // The head already returns calibrated categorical probabilities.
+            // Sharpening them again suppresses lower-frequency play/exploration
+            // so heavily that a larger model can stop starting those routines.
+            var score=_policy[i]*_preferences[i]*Math.Pow(.38,repeats);
             if(action==KittyAction.Zoomies) score*=1-Frustration*.6;
             choices[i]=Eligible(action) ? score : 0; total+=choices[i];
         }
@@ -542,7 +672,7 @@ public sealed class KittyMind
         if(focus is null)
         {
             Span<double> scores=stackalloc double[KittyBrain.AttentionCount];
-            var probabilities=_brain.AttentionProbabilities; var total=0d;
+            var probabilities=_attentionPolicy; var total=0d;
             for(var i=0;i<scores.Length;i++)
             {
                 var value=Math.Pow(probabilities[i],1.2);

@@ -1,5 +1,5 @@
 {
-  "architecture": "relay-causal-transformer-156k-v1",
+  "architecture": "relay-causal-transformer-1m-v1",
   "seed": 20261101,
   "config": {
     "work_dir": null,
@@ -10,26 +10,26 @@
     "threads": 4,
     "resume": null
   },
-  "trained_parameters": 155848,
-  "fixed_position_values": 3072,
-  "numeric_weight_bytes": 635680,
+  "trained_parameters": 1070888,
+  "fixed_position_values": 8192,
+  "numeric_weight_bytes": 4316320,
   "input_count": 22,
   "behavior_count": 35,
   "attention_count": 5,
   "context_steps": 32,
   "blocks": 2,
-  "model_width": 96,
-  "heads": 6,
-  "feed_forward_width": 192,
-  "selected_epoch": 90,
+  "model_width": 256,
+  "heads": 8,
+  "feed_forward_width": 512,
+  "selected_epoch": 80,
   "checkpoint_selection": "lowest behavior KL + 0.6 * attention KL on progress-validation seed only",
   "layer_norm_epsilon": 1e-05,
   "gelu": "tanh approximation",
   "torch_version": "2.15.0+cpu",
   "numpy_version": "2.5.4",
   "device": "CPU",
-  "training_seconds": 218.111473500001,
-  "final_audit_seconds": 0.292190500000288,
+  "training_seconds": 903.7241045000046,
+  "final_audit_seconds": 1.129473399996641,
   "training_episodes": 8000,
   "training_valid_timesteps": 176985,
   "train_scenarios": [
@@ -57,167 +57,204 @@
     "cat_led_social_choice"
   ],
   "progress_validation_seed": 20262101,
-  "heldout_seed": 20266101,
-  "unseen_mix_seed": 20267101,
+  "heldout_seed": 20268101,
+  "unseen_mix_seed": 20269101,
+  "unseen_family_seed": 20270101,
   "heldout": {
     "episodes": 1200,
-    "valid_timesteps": 26166,
+    "valid_timesteps": 26460,
     "behavior": {
-      "top1_agreement": 0.9740502942750133,
-      "mean_kl_nats": 0.0008549375925213099,
-      "mean_total_variation": 0.011626939289271832
+      "top1_agreement": 0.9824263038548753,
+      "mean_kl_nats": 0.0005264601786620915,
+      "mean_total_variation": 0.007762321271002293
     },
     "attention": {
-      "top1_agreement": 0.9946113276771382,
-      "mean_kl_nats": 0.00013654076610691845,
-      "mean_total_variation": 0.005098242778331041
+      "top1_agreement": 0.996031746031746,
+      "mean_kl_nats": 7.366269710473716e-05,
+      "mean_total_variation": 0.0037803021259605885
     },
     "by_scenario": {
       "quiet_home": {
-        "timesteps": 999,
-        "behavior_agreement": 0.965965965965966,
-        "attention_agreement": 0.994994994994995
+        "timesteps": 1136,
+        "behavior_agreement": 0.9779929577464789,
+        "attention_agreement": 0.9876760563380281
       },
       "prey_play": {
-        "timesteps": 1499,
-        "behavior_agreement": 0.9499666444296198,
-        "attention_agreement": 0.9873248832555037
+        "timesteps": 1055,
+        "behavior_agreement": 0.9687203791469194,
+        "attention_agreement": 0.9914691943127962
       },
       "repeated_cursor": {
-        "timesteps": 1117,
-        "behavior_agreement": 0.9623992837958818,
-        "attention_agreement": 0.9964189794091316
+        "timesteps": 1118,
+        "behavior_agreement": 0.9892665474060823,
+        "attention_agreement": 0.998211091234347
       },
       "gentle_contact": {
-        "timesteps": 1015,
-        "behavior_agreement": 0.9960591133004926,
-        "attention_agreement": 0.9990147783251232
+        "timesteps": 1373,
+        "behavior_agreement": 0.9949016751638747,
+        "attention_agreement": 1.0
       },
       "rapid_pestering": {
-        "timesteps": 1155,
-        "behavior_agreement": 0.9965367965367965,
-        "attention_agreement": 0.9688311688311688
+        "timesteps": 1319,
+        "behavior_agreement": 0.9977255496588324,
+        "attention_agreement": 0.9931766489764974
       },
       "sudden_novelty": {
-        "timesteps": 1588,
-        "behavior_agreement": 0.9615869017632241,
-        "attention_agreement": 0.9911838790931989
+        "timesteps": 1369,
+        "behavior_agreement": 0.9671292914536158,
+        "attention_agreement": 0.9934258582907232
       },
       "gradual_novelty": {
-        "timesteps": 989,
-        "behavior_agreement": 0.967644084934277,
+        "timesteps": 1300,
+        "behavior_agreement": 0.9738461538461538,
         "attention_agreement": 1.0
       },
       "play_then_groom": {
-        "timesteps": 1338,
-        "behavior_agreement": 0.9245142002989537,
-        "attention_agreement": 0.9745889387144993
+        "timesteps": 1058,
+        "behavior_agreement": 0.9555765595463138,
+        "attention_agreement": 0.9820415879017014
       },
       "settle_nap_wake": {
-        "timesteps": 835,
-        "behavior_agreement": 0.9820359281437125,
-        "attention_agreement": 0.9964071856287425
+        "timesteps": 1295,
+        "behavior_agreement": 0.9861003861003861,
+        "attention_agreement": 0.993050193050193
       },
       "surface_patrol": {
-        "timesteps": 1145,
-        "behavior_agreement": 0.948471615720524,
+        "timesteps": 1275,
+        "behavior_agreement": 0.9513725490196079,
         "attention_agreement": 1.0
       },
       "solitary_play": {
-        "timesteps": 1053,
+        "timesteps": 1471,
         "behavior_agreement": 1.0,
         "attention_agreement": 1.0
       },
       "social_choice": {
-        "timesteps": 1243,
-        "behavior_agreement": 0.9943684633950121,
+        "timesteps": 1462,
+        "behavior_agreement": 0.9972640218878249,
         "attention_agreement": 1.0
       },
       "recall_play": {
-        "timesteps": 1256,
-        "behavior_agreement": 0.9904458598726115,
-        "attention_agreement": 1.0
+        "timesteps": 882,
+        "behavior_agreement": 0.9965986394557823,
+        "attention_agreement": 0.9965986394557823
       },
       "recall_contact": {
-        "timesteps": 1276,
-        "behavior_agreement": 1.0,
+        "timesteps": 1390,
+        "behavior_agreement": 0.9618705035971223,
         "attention_agreement": 1.0
       },
       "recall_startle": {
-        "timesteps": 1210,
-        "behavior_agreement": 0.9512396694214876,
+        "timesteps": 965,
+        "behavior_agreement": 1.0,
         "attention_agreement": 1.0
       },
       "recall_novelty": {
-        "timesteps": 1082,
-        "behavior_agreement": 0.955637707948244,
-        "attention_agreement": 1.0
+        "timesteps": 1014,
+        "behavior_agreement": 0.9575936883629191,
+        "attention_agreement": 0.9970414201183432
       },
       "mixed_play_social": {
-        "timesteps": 1172,
-        "behavior_agreement": 0.9778156996587031,
-        "attention_agreement": 0.9863481228668942
+        "timesteps": 859,
+        "behavior_agreement": 0.9883585564610011,
+        "attention_agreement": 0.9860302677532014
       },
       "mixed_novel_rest": {
-        "timesteps": 1177,
-        "behavior_agreement": 0.9660152931180969,
-        "attention_agreement": 0.9974511469838573
+        "timesteps": 940,
+        "behavior_agreement": 0.9765957446808511,
+        "attention_agreement": 0.9893617021276596
       },
       "spaced_pet_then_space": {
-        "timesteps": 1254,
-        "behavior_agreement": 0.9952153110047847,
-        "attention_agreement": 0.9992025518341308
+        "timesteps": 1423,
+        "behavior_agreement": 0.9922698524244554,
+        "attention_agreement": 0.9992972593113141
       },
       "poke_then_recovery": {
-        "timesteps": 1367,
-        "behavior_agreement": 0.9824433065106072,
-        "attention_agreement": 0.9970738844184345
+        "timesteps": 1200,
+        "behavior_agreement": 0.9875,
+        "attention_agreement": 1.0
       },
       "calm_handling_then_release": {
-        "timesteps": 1187,
-        "behavior_agreement": 0.9941027801179444,
-        "attention_agreement": 0.9991575400168492
+        "timesteps": 1136,
+        "behavior_agreement": 0.9947183098591549,
+        "attention_agreement": 0.9955985915492958
       },
       "cat_led_social_choice": {
-        "timesteps": 1209,
-        "behavior_agreement": 0.9809760132340778,
+        "timesteps": 1420,
+        "behavior_agreement": 0.9915492957746479,
         "attention_agreement": 1.0
       }
     }
   },
   "unseen_ordered_mixtures": {
     "episodes": 600,
-    "valid_timesteps": 13384,
+    "valid_timesteps": 13191,
     "behavior": {
-      "top1_agreement": 0.852062163777645,
-      "mean_kl_nats": 0.03345734253525734,
-      "mean_total_variation": 0.06141854077577591
+      "top1_agreement": 0.8342051398680919,
+      "mean_kl_nats": 0.04040345922112465,
+      "mean_total_variation": 0.0737079530954361
     },
     "attention": {
-      "top1_agreement": 0.9506126718469815,
-      "mean_kl_nats": 0.0051312996074557304,
-      "mean_total_variation": 0.026623249053955078
+      "top1_agreement": 0.942688196497612,
+      "mean_kl_nats": 0.008416268974542618,
+      "mean_total_variation": 0.03236828371882439
     },
     "by_scenario": {
       "heldout_social_then_novel": {
-        "timesteps": 3327,
-        "behavior_agreement": 0.9038172527802826,
-        "attention_agreement": 0.996092575894199
+        "timesteps": 3411,
+        "behavior_agreement": 0.873057754324245,
+        "attention_agreement": 0.9982409850483729
       },
       "heldout_play_then_startle": {
-        "timesteps": 3292,
-        "behavior_agreement": 0.8259416767922235,
-        "attention_agreement": 0.956865127582017
+        "timesteps": 3191,
+        "behavior_agreement": 0.7239109996866187,
+        "attention_agreement": 0.9106863052334692
       },
       "heldout_handling_then_play": {
-        "timesteps": 3654,
-        "behavior_agreement": 0.7996715927750411,
-        "attention_agreement": 0.89792008757526
+        "timesteps": 3304,
+        "behavior_agreement": 0.8556295399515739,
+        "attention_agreement": 0.9098062953995157
       },
       "heldout_poke_then_pet": {
-        "timesteps": 3111,
-        "behavior_agreement": 0.8858887817422051,
-        "attention_agreement": 0.9572484731597557
+        "timesteps": 3285,
+        "behavior_agreement": 0.8794520547945206,
+        "attention_agreement": 0.9491628614916287
+      }
+    }
+  },
+  "unseen_families": {
+    "episodes": 600,
+    "valid_timesteps": 13204,
+    "behavior": {
+      "top1_agreement": 0.8869282035746744,
+      "mean_kl_nats": 0.04804909974336624,
+      "mean_total_variation": 0.10037056356668472
+    },
+    "attention": {
+      "top1_agreement": 0.9906089063920024,
+      "mean_kl_nats": 0.0019422477344051003,
+      "mean_total_variation": 0.016521750018000603
+    },
+    "by_scenario": {
+      "heldout_ambient_patrol": {
+        "timesteps": 3315,
+        "behavior_agreement": 0.9493212669683257,
+        "attention_agreement": 1.0
+      },
+      "heldout_tired_interrupted_play": {
+        "timesteps": 2976,
+        "behavior_agreement": 1.0,
+        "attention_agreement": 1.0
+      },
+      "heldout_uncertain_handling": {
+        "timesteps": 3228,
+        "behavior_agreement": 0.6632589838909542,
+        "attention_agreement": 0.9618959107806692
+      },
+      "heldout_familiar_reunion": {
+        "timesteps": 3685,
+        "behavior_agreement": 0.9354138398914519,
+        "attention_agreement": 0.9997286295793758
       }
     }
   },
@@ -225,8 +262,8 @@
     "counterfactuals": {
       "play_vs_quiet": {
         "identical_final_observation": true,
-        "behavior_total_variation": 0.0787271186709404,
-        "attention_total_variation": 0.09567879885435104,
+        "behavior_total_variation": 0.07390739023685455,
+        "attention_total_variation": 0.08577311038970947,
         "left_top_behavior": "SlowBlink",
         "right_top_behavior": "SlowBlink",
         "left_top_attention": "Environment",
@@ -234,8 +271,8 @@
       },
       "gentle_vs_pester": {
         "identical_final_observation": true,
-        "behavior_total_variation": 0.224873885512352,
-        "attention_total_variation": 0.07716269791126251,
+        "behavior_total_variation": 0.22501763701438904,
+        "attention_total_variation": 0.08144883066415787,
         "left_top_behavior": "SlowBlink",
         "right_top_behavior": "SlowBlink",
         "left_top_attention": "Environment",
@@ -243,8 +280,8 @@
       },
       "novel_vs_quiet": {
         "identical_final_observation": true,
-        "behavior_total_variation": 0.041454728692770004,
-        "attention_total_variation": 0.1802302896976471,
+        "behavior_total_variation": 0.037317004054784775,
+        "attention_total_variation": 0.17365005612373352,
         "left_top_behavior": "SlowBlink",
         "right_top_behavior": "SlowBlink",
         "left_top_attention": "Environment",
@@ -252,8 +289,8 @@
       },
       "novel_vs_repeated": {
         "identical_final_observation": true,
-        "behavior_total_variation": 0.06738147139549255,
-        "attention_total_variation": 0.19456860423088074,
+        "behavior_total_variation": 0.04671243205666542,
+        "attention_total_variation": 0.1785106360912323,
         "left_top_behavior": "SlowBlink",
         "right_top_behavior": "SlowBlink",
         "left_top_attention": "Environment",
@@ -261,8 +298,8 @@
       },
       "pester_vs_quiet": {
         "identical_final_observation": true,
-        "behavior_total_variation": 0.02437567338347435,
-        "attention_total_variation": 0.08769054710865021,
+        "behavior_total_variation": 0.027222516015172005,
+        "attention_total_variation": 0.08652466535568237,
         "left_top_behavior": "SlowBlink",
         "right_top_behavior": "SlowBlink",
         "left_top_attention": "Environment",
@@ -277,133 +314,133 @@
         "shuffle_prefix_attention_tv": 0.0
       },
       "play": {
-        "repeat_final_behavior_tv": 0.0787271186709404,
-        "repeat_final_attention_tv": 0.09567879885435104,
-        "shuffle_prefix_behavior_tv": 0.1402740627527237,
-        "shuffle_prefix_attention_tv": 0.1408475637435913
+        "repeat_final_behavior_tv": 0.07390739023685455,
+        "repeat_final_attention_tv": 0.08577311038970947,
+        "shuffle_prefix_behavior_tv": 0.2712419033050537,
+        "shuffle_prefix_attention_tv": 0.3024258315563202
       },
       "gentle": {
-        "repeat_final_behavior_tv": 0.21245186030864716,
-        "repeat_final_attention_tv": 0.011908509768545628,
-        "shuffle_prefix_behavior_tv": 0.18620847165584564,
-        "shuffle_prefix_attention_tv": 0.00702033331617713
+        "repeat_final_behavior_tv": 0.20093365013599396,
+        "repeat_final_attention_tv": 0.0050758360885083675,
+        "shuffle_prefix_behavior_tv": 0.2799103558063507,
+        "shuffle_prefix_attention_tv": 0.011034292168915272
       },
       "pester": {
-        "repeat_final_behavior_tv": 0.02437567338347435,
-        "repeat_final_attention_tv": 0.08769054710865021,
-        "shuffle_prefix_behavior_tv": 0.10311742126941681,
-        "shuffle_prefix_attention_tv": 0.11398865282535553
+        "repeat_final_behavior_tv": 0.027222516015172005,
+        "repeat_final_attention_tv": 0.08652466535568237,
+        "shuffle_prefix_behavior_tv": 0.130902498960495,
+        "shuffle_prefix_attention_tv": 0.15431293845176697
       },
       "novel": {
-        "repeat_final_behavior_tv": 0.041454728692770004,
-        "repeat_final_attention_tv": 0.1802302896976471,
-        "shuffle_prefix_behavior_tv": 0.1546546220779419,
-        "shuffle_prefix_attention_tv": 0.46222373843193054
+        "repeat_final_behavior_tv": 0.037317004054784775,
+        "repeat_final_attention_tv": 0.17365005612373352,
+        "shuffle_prefix_behavior_tv": 0.247310608625412,
+        "shuffle_prefix_attention_tv": 0.5013290643692017
       },
       "repeated": {
-        "repeat_final_behavior_tv": 0.04619806259870529,
-        "repeat_final_attention_tv": 0.023456541821360588,
-        "shuffle_prefix_behavior_tv": 0.051105797290802,
-        "shuffle_prefix_attention_tv": 0.04545605555176735
+        "repeat_final_behavior_tv": 0.025793742388486862,
+        "repeat_final_attention_tv": 0.021830875426530838,
+        "shuffle_prefix_behavior_tv": 0.035619765520095825,
+        "shuffle_prefix_attention_tv": 0.03782688453793526
       },
       "gradual": {
-        "repeat_final_behavior_tv": 0.02394706755876541,
-        "repeat_final_attention_tv": 0.06261132657527924,
-        "shuffle_prefix_behavior_tv": 0.051410552114248276,
-        "shuffle_prefix_attention_tv": 0.12487748265266418
+        "repeat_final_behavior_tv": 0.022887462750077248,
+        "repeat_final_attention_tv": 0.09905990958213806,
+        "shuffle_prefix_behavior_tv": 0.06661680340766907,
+        "shuffle_prefix_attention_tv": 0.13785362243652344
       }
     }
   },
   "history": [
     {
       "epoch": 1,
-      "loss": 2.9599776580220176,
-      "behavior_agreement": 0.8312304621294867,
-      "attention_agreement": 0.9676095062332869,
-      "behavior_kl": 0.03098408132791519,
-      "attention_kl": 0.008182150311768055,
-      "elapsed_seconds": 2.8895591000000422
+      "loss": 2.989496316228594,
+      "behavior_agreement": 0.8094987006139128,
+      "attention_agreement": 0.9641444766675454,
+      "behavior_kl": 0.02599465288221836,
+      "attention_kl": 0.008105982095003128,
+      "elapsed_seconds": 12.10413410000183
     },
     {
       "epoch": 10,
-      "loss": 2.7554344620023454,
-      "behavior_agreement": 0.8997024594177244,
-      "attention_agreement": 0.9879853866144401,
-      "behavior_kl": 0.0076408712193369865,
-      "attention_kl": 0.0008622694294899702,
-      "elapsed_seconds": 27.311017100000754
+      "loss": 2.7520231632959273,
+      "behavior_agreement": 0.9263304583631502,
+      "attention_agreement": 0.9935219012466574,
+      "behavior_kl": 0.005167536903172731,
+      "attention_kl": 0.0004793495172634721,
+      "elapsed_seconds": 89.81950810000126
     },
     {
       "epoch": 20,
-      "loss": 2.7511877105349587,
-      "behavior_agreement": 0.9251252306881097,
-      "attention_agreement": 0.9906218221535912,
-      "behavior_kl": 0.004611979704350233,
-      "attention_kl": 0.0005679110181517899,
-      "elapsed_seconds": 54.76909180000075
+      "loss": 2.7485652083442327,
+      "behavior_agreement": 0.9561975066852473,
+      "attention_agreement": 0.9940115249896426,
+      "behavior_kl": 0.0021622199565172195,
+      "attention_kl": 0.00030000630067661405,
+      "elapsed_seconds": 198.98845260000235
     },
     {
       "epoch": 30,
-      "loss": 2.7492790619532266,
-      "behavior_agreement": 0.9537870513351663,
-      "attention_agreement": 0.9891152875597906,
-      "behavior_kl": 0.00279424199834466,
-      "attention_kl": 0.000694184098392725,
-      "elapsed_seconds": 81.02215129999968
+      "loss": 2.747648128441402,
+      "behavior_agreement": 0.9543143384429965,
+      "attention_agreement": 0.9928816240442921,
+      "behavior_kl": 0.001839592820033431,
+      "attention_kl": 0.00038351371767930686,
+      "elapsed_seconds": 306.3687381999989
     },
     {
       "epoch": 40,
-      "loss": 2.747347525187901,
-      "behavior_agreement": 0.9491921208240744,
-      "attention_agreement": 0.9933335844224322,
-      "behavior_kl": 0.0021495711989700794,
-      "attention_kl": 0.0003142811474390328,
-      "elapsed_seconds": 107.81017749999955
+      "loss": 2.7467315679504756,
+      "behavior_agreement": 0.9669692290309216,
+      "attention_agreement": 0.9906594855184362,
+      "behavior_kl": 0.0012212706496939063,
+      "attention_kl": 0.0004031047865282744,
+      "elapsed_seconds": 398.2383076999977
     },
     {
       "epoch": 50,
-      "loss": 2.7465474633943465,
-      "behavior_agreement": 0.9668562389363866,
-      "attention_agreement": 0.994953109110768,
-      "behavior_kl": 0.0015004482120275497,
-      "attention_kl": 0.00021692356676794589,
-      "elapsed_seconds": 134.8170902999991
+      "loss": 2.7458452639125643,
+      "behavior_agreement": 0.9712251892584084,
+      "attention_agreement": 0.9940868517193326,
+      "behavior_kl": 0.0009642344084568322,
+      "attention_kl": 0.00024656637106090784,
+      "elapsed_seconds": 484.8126082000017
     },
     {
       "epoch": 60,
-      "loss": 2.7470114628473916,
-      "behavior_agreement": 0.9680238032465821,
-      "attention_agreement": 0.9954050694889082,
-      "behavior_kl": 0.0012479833094403148,
-      "attention_kl": 0.00018929880752693862,
-      "elapsed_seconds": 160.15745759999845
+      "loss": 2.7465085131781444,
+      "behavior_agreement": 0.9772889909984558,
+      "attention_agreement": 0.9947647922865429,
+      "behavior_kl": 0.0008119961130432785,
+      "attention_kl": 0.00014794334128964692,
+      "elapsed_seconds": 595.0335600000035
     },
     {
       "epoch": 70,
-      "loss": 2.7467633343878246,
-      "behavior_agreement": 0.9705849120560431,
-      "attention_agreement": 0.9945764754623178,
-      "behavior_kl": 0.001075119012966752,
-      "attention_kl": 0.00017780759662855417,
-      "elapsed_seconds": 179.68782339999962
+      "loss": 2.746245162827628,
+      "behavior_agreement": 0.9843320402244736,
+      "attention_agreement": 0.9961206734209634,
+      "behavior_kl": 0.0005626628408208489,
+      "attention_kl": 0.00011928710591746494,
+      "elapsed_seconds": 699.965342800002
     },
     {
       "epoch": 80,
-      "loss": 2.7476254332633245,
-      "behavior_agreement": 0.9775149711875258,
-      "attention_agreement": 0.9962713268803435,
-      "behavior_kl": 0.0008926814189180732,
-      "attention_kl": 0.00012944646005053073,
-      "elapsed_seconds": 198.57831100000112
+      "loss": 2.747157193365551,
+      "behavior_agreement": 0.9818085947798576,
+      "attention_agreement": 0.9962336635154985,
+      "behavior_kl": 0.0004739811993204057,
+      "attention_kl": 7.649067265447229e-05,
+      "elapsed_seconds": 798.1778904000021
     },
     {
       "epoch": 90,
-      "loss": 2.7464591293107894,
-      "behavior_agreement": 0.9746525554593047,
-      "attention_agreement": 0.9954427328537532,
-      "behavior_kl": 0.0008467219886370003,
-      "attention_kl": 0.00013987878628540784,
-      "elapsed_seconds": 217.7852415999987
+      "loss": 2.746045095579965,
+      "behavior_agreement": 0.9812813076720274,
+      "attention_agreement": 0.9970999209069338,
+      "behavior_kl": 0.0005445476854220033,
+      "attention_kl": 9.199006308335811e-05,
+      "elapsed_seconds": 902.5489488000021
     }
   ],
   "limitations": [
@@ -413,185 +450,225 @@
     "Context is bounded to32 observations; longer needs are supplied by existing explicit need/memory inputs.",
     "No user recordings, cloud service, pretrained model, audio output, or language generation."
   ],
-  "model_sha256": "d2478269e90a62b0e5d503cb9abec0bb7d0545bc48f165cd4bff4303b37dbd22",
-  "comparison_with_19208_parameter_baseline": {
-    "baseline_trained_parameters": 19208,
-    "selected_trained_parameters": 155848,
+  "model_sha256": "1ad04d5519988ec0e67ac4de86eef08d5df4b3e0b8f597ccf934a7c5f7748f0e",
+  "comparison_with_155848_parameter_baseline": {
+    "baseline_trained_parameters": 155848,
+    "selected_trained_parameters": 1070888,
     "same_curriculum_and_episode_count": true,
     "same_audit_episodes": true,
-    "heldout_seed": 20266101,
-    "unseen_seed": 20267101,
+    "baseline_model_sha256": "d2478269e90a62b0e5d503cb9abec0bb7d0545bc48f165cd4bff4303b37dbd22",
+    "baseline_selected_epoch": 90,
+    "selected_epoch": 80,
+    "limitations": "One training seed per architecture; comparison measures imitation of the same original synthetic teacher, not animal intelligence, tracking performance, or a guarantee that more parameters improve every task.",
     "baseline_heldout": {
       "episodes": 1200,
-      "valid_timesteps": 26166,
+      "valid_timesteps": 26460,
       "behavior": {
-        "top1_agreement": 0.9126729343422763,
-        "mean_kl_nats": 0.006184827070683241,
-        "mean_total_variation": 0.03355707973241806
+        "top1_agreement": 0.9755102040816327,
+        "mean_kl_nats": 0.0008677564328536391,
+        "mean_total_variation": 0.01179398875683546
       },
       "attention": {
-        "top1_agreement": 0.9901780937093939,
-        "mean_kl_nats": 0.0006026516784913838,
-        "mean_total_variation": 0.01078095193952322
+        "top1_agreement": 0.9952003023431595,
+        "mean_kl_nats": 0.00013234210200607777,
+        "mean_total_variation": 0.004915766417980194
       },
       "by_scenario": {
         "quiet_home": {
-          "timesteps": 999,
-          "behavior_agreement": 0.8958958958958959,
-          "attention_agreement": 0.973973973973974
+          "timesteps": 1136,
+          "behavior_agreement": 0.9595070422535211,
+          "attention_agreement": 0.9929577464788732
         },
         "prey_play": {
-          "timesteps": 1499,
-          "behavior_agreement": 0.8545697131420947,
-          "attention_agreement": 0.9773182121414277
+          "timesteps": 1055,
+          "behavior_agreement": 0.9545023696682464,
+          "attention_agreement": 0.9876777251184834
         },
         "repeated_cursor": {
-          "timesteps": 1117,
-          "behavior_agreement": 0.8683974932855864,
-          "attention_agreement": 0.9946284691136974
+          "timesteps": 1118,
+          "behavior_agreement": 0.9767441860465116,
+          "attention_agreement": 0.9991055456171736
         },
         "gentle_contact": {
-          "timesteps": 1015,
-          "behavior_agreement": 0.9576354679802955,
-          "attention_agreement": 0.9980295566502463
+          "timesteps": 1373,
+          "behavior_agreement": 0.9912600145666424,
+          "attention_agreement": 1.0
         },
         "rapid_pestering": {
-          "timesteps": 1155,
-          "behavior_agreement": 0.9861471861471861,
-          "attention_agreement": 0.9844155844155844
+          "timesteps": 1319,
+          "behavior_agreement": 0.9939347990902199,
+          "attention_agreement": 0.9666413949962093
         },
         "sudden_novelty": {
-          "timesteps": 1588,
-          "behavior_agreement": 0.8356423173803527,
-          "attention_agreement": 0.9924433249370277
+          "timesteps": 1369,
+          "behavior_agreement": 0.9474068663257852,
+          "attention_agreement": 0.9912344777209642
         },
         "gradual_novelty": {
-          "timesteps": 989,
-          "behavior_agreement": 0.6956521739130435,
+          "timesteps": 1300,
+          "behavior_agreement": 0.9461538461538461,
           "attention_agreement": 1.0
         },
         "play_then_groom": {
-          "timesteps": 1338,
-          "behavior_agreement": 0.773542600896861,
-          "attention_agreement": 0.9446935724962631
+          "timesteps": 1058,
+          "behavior_agreement": 0.9262759924385633,
+          "attention_agreement": 0.9858223062381852
         },
         "settle_nap_wake": {
-          "timesteps": 835,
-          "behavior_agreement": 0.888622754491018,
-          "attention_agreement": 0.98562874251497
+          "timesteps": 1295,
+          "behavior_agreement": 0.972972972972973,
+          "attention_agreement": 0.9953667953667954
         },
         "surface_patrol": {
-          "timesteps": 1145,
-          "behavior_agreement": 0.6681222707423581,
+          "timesteps": 1275,
+          "behavior_agreement": 0.9498039215686275,
           "attention_agreement": 1.0
         },
         "solitary_play": {
-          "timesteps": 1053,
+          "timesteps": 1471,
           "behavior_agreement": 1.0,
           "attention_agreement": 1.0
         },
         "social_choice": {
-          "timesteps": 1243,
-          "behavior_agreement": 0.9879324215607401,
+          "timesteps": 1462,
+          "behavior_agreement": 0.9972640218878249,
           "attention_agreement": 1.0
         },
         "recall_play": {
-          "timesteps": 1256,
-          "behavior_agreement": 0.9570063694267515,
-          "attention_agreement": 1.0
+          "timesteps": 882,
+          "behavior_agreement": 0.9943310657596371,
+          "attention_agreement": 0.9988662131519275
         },
         "recall_contact": {
-          "timesteps": 1276,
+          "timesteps": 1390,
           "behavior_agreement": 1.0,
           "attention_agreement": 1.0
         },
         "recall_startle": {
-          "timesteps": 1210,
-          "behavior_agreement": 0.9479338842975207,
+          "timesteps": 965,
+          "behavior_agreement": 0.9523316062176166,
           "attention_agreement": 1.0
         },
         "recall_novelty": {
-          "timesteps": 1082,
-          "behavior_agreement": 0.9981515711645101,
-          "attention_agreement": 0.9907578558225508
+          "timesteps": 1014,
+          "behavior_agreement": 0.9585798816568047,
+          "attention_agreement": 1.0
         },
         "mixed_play_social": {
-          "timesteps": 1172,
-          "behavior_agreement": 0.9513651877133106,
-          "attention_agreement": 0.976962457337884
+          "timesteps": 859,
+          "behavior_agreement": 0.9906868451688009,
+          "attention_agreement": 0.9930151338766007
         },
         "mixed_novel_rest": {
-          "timesteps": 1177,
-          "behavior_agreement": 0.9218351741716228,
-          "attention_agreement": 0.9855564995751912
+          "timesteps": 940,
+          "behavior_agreement": 0.9723404255319149,
+          "attention_agreement": 0.9936170212765958
         },
         "spaced_pet_then_space": {
-          "timesteps": 1254,
-          "behavior_agreement": 0.988835725677831,
-          "attention_agreement": 0.9976076555023924
+          "timesteps": 1423,
+          "behavior_agreement": 0.9964862965565706,
+          "attention_agreement": 0.9992972593113141
         },
         "poke_then_recovery": {
-          "timesteps": 1367,
-          "behavior_agreement": 0.9400146305779078,
-          "attention_agreement": 0.9890270665691295
+          "timesteps": 1200,
+          "behavior_agreement": 0.9766666666666667,
+          "attention_agreement": 0.9933333333333333
         },
         "calm_handling_then_release": {
-          "timesteps": 1187,
-          "behavior_agreement": 0.983150800336984,
-          "attention_agreement": 0.9991575400168492
+          "timesteps": 1136,
+          "behavior_agreement": 0.9920774647887324,
+          "attention_agreement": 0.9947183098591549
         },
         "cat_led_social_choice": {
-          "timesteps": 1209,
-          "behavior_agreement": 0.9834574028122415,
+          "timesteps": 1420,
+          "behavior_agreement": 0.9887323943661972,
           "attention_agreement": 1.0
         }
       }
     },
+    "heldout_agreement_delta_percentage_points": {
+      "behavior": 0.691609977324259,
+      "attention": 0.08314436885865639
+    },
     "baseline_unseen_ordered_mixtures": {
       "episodes": 600,
-      "valid_timesteps": 13384,
+      "valid_timesteps": 13191,
       "behavior": {
-        "top1_agreement": 0.7999103407053197,
-        "mean_kl_nats": 0.09906724840402603,
-        "mean_total_variation": 0.0920509397983551
+        "top1_agreement": 0.8524751724660754,
+        "mean_kl_nats": 0.03249088302254677,
+        "mean_total_variation": 0.060172419995069504
       },
       "attention": {
-        "top1_agreement": 0.909593544530783,
-        "mean_kl_nats": 0.01953527145087719,
-        "mean_total_variation": 0.04894787073135376
+        "top1_agreement": 0.9556515806231521,
+        "mean_kl_nats": 0.0047117662616074085,
+        "mean_total_variation": 0.025292478501796722
       },
       "by_scenario": {
         "heldout_social_then_novel": {
-          "timesteps": 3327,
-          "behavior_agreement": 0.7920048091373609,
-          "attention_agreement": 0.9924857228734596
+          "timesteps": 3411,
+          "behavior_agreement": 0.8924069187921431,
+          "attention_agreement": 0.9982409850483729
         },
         "heldout_play_then_startle": {
-          "timesteps": 3292,
-          "behavior_agreement": 0.7858444714459295,
-          "attention_agreement": 0.9170716889428918
+          "timesteps": 3191,
+          "behavior_agreement": 0.8185521780006267,
+          "attention_agreement": 0.9558132246944532
         },
         "heldout_handling_then_play": {
-          "timesteps": 3654,
-          "behavior_agreement": 0.8628899835796388,
-          "attention_agreement": 0.7887246852764094
+          "timesteps": 3304,
+          "behavior_agreement": 0.8032687651331719,
+          "attention_agreement": 0.9107142857142857
         },
         "heldout_poke_then_pet": {
-          "timesteps": 3111,
-          "behavior_agreement": 0.7492767598842816,
-          "attention_agreement": 0.9549983927997429
+          "timesteps": 3285,
+          "behavior_agreement": 0.893455098934551,
+          "attention_agreement": 0.956468797564688
         }
       }
     },
-    "baseline_model_sha256": "dbc8a10bbdb6928e29fb27da78dfd796d8231e099234ee73ff4e8897a5192763",
-    "limitations": "Comparison concerns imitation of the same synthetic teacher. The larger model uses progress-validation checkpoint selection; the small baseline is its previously frozen90-epoch checkpoint. It does not measure real-cat intelligence or tracking performance.",
-    "heldout_agreement_delta_percentage_points": {
-      "behavior": 6.137735993273708,
-      "attention": 0.443323396774431
+    "unseen_ordered_mixtures_agreement_delta_percentage_points": {
+      "behavior": -1.8270032597983543,
+      "attention": -1.29633841255401
     },
-    "unseen_agreement_delta_percentage_points": {
-      "behavior": 5.215182307232524,
-      "attention": 4.10191273161985
+    "baseline_unseen_families": {
+      "episodes": 600,
+      "valid_timesteps": 13204,
+      "behavior": {
+        "top1_agreement": 0.9119206301120872,
+        "mean_kl_nats": 0.012664617970585823,
+        "mean_total_variation": 0.053200338035821915
+      },
+      "attention": {
+        "top1_agreement": 0.9906089063920024,
+        "mean_kl_nats": 0.003440024796873331,
+        "mean_total_variation": 0.019982293248176575
+      },
+      "by_scenario": {
+        "heldout_ambient_patrol": {
+          "timesteps": 3315,
+          "behavior_agreement": 0.8853695324283559,
+          "attention_agreement": 1.0
+        },
+        "heldout_tired_interrupted_play": {
+          "timesteps": 2976,
+          "behavior_agreement": 1.0,
+          "attention_agreement": 1.0
+        },
+        "heldout_uncertain_handling": {
+          "timesteps": 3228,
+          "behavior_agreement": 0.8231102850061958,
+          "attention_agreement": 0.9622057001239157
+        },
+        "heldout_familiar_reunion": {
+          "timesteps": 3685,
+          "behavior_agreement": 0.9424694708276797,
+          "attention_agreement": 0.9994572591587517
+        }
+      }
+    },
+    "unseen_families_agreement_delta_percentage_points": {
+      "behavior": -2.499242653741285,
+      "attention": 0.0
     }
   }
 }

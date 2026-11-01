@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2 - Local preview, unreleased
+
+- Relay's causal Transformer grows to 1,070,888 trained parameters. Inference runs in a bounded background job so it does not block the interface.
+- A small personal learning layer adapts from gentle petting and calm handling. Learned reactions, bond, core memories and context remain local and survive upgrades.
+- Relay can discover and practice six procedural motion skills, including rollovers, hops and hopping runs. Motion trajectories vary and learned preferences guide future practice; no code is generated.
+- Fixed startup after older module installs: legacy custom EyeTrackVR profiles are recognized safely, and a damaged inactive module no longer prevents healthy modules from opening.
+- Invalid saved entries are isolated without deleting their files. Future-format libraries open read-only instead of being overwritten, and recovery details appear in the activity log.
+
 ## 1.1.1 - Local preview, unreleased
 
 - Relay uses a dedicated causal Transformer trained on original, research-informed cat-behavior sequences.

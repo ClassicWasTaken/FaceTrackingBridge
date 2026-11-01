@@ -129,6 +129,7 @@ public partial class MainWindow : Window
             _initialized = true;
             Motion.Transition(_currentPage ?? OverviewPage, _motionEnabled);
             RefreshModule();
+            foreach (var issue in _store.RecoveryIssues) Log("Module recovery: " + issue);
             TargetLabel.Text = $"{_settings.OutputHost} : {_settings.OutputPort}";
             if (_store.Current is { } current)
             {
@@ -140,6 +141,7 @@ public partial class MainWindow : Window
                 SetNoModuleState();
                 Log(_store.Installed.Count == 0 ? "No tracking module installed. Choose a supported module ZIP or drop it onto this window." : "Choose an installed tracking module in Modules.");
             }
+            ShowModuleRecoveryNotice();
         })).Task.Unwrap();
 
     public void ConfigureSystemTray(Func<bool> ensureIcon) => _ensureSystemTrayIcon = ensureIcon;
@@ -323,8 +325,8 @@ public partial class MainWindow : Window
         // Navigation stays available while a tracking operation is busy. Making
         // it a disabled action caused a visible fade on every Start/Stop.
         ImportButton.IsEnabled = _initialized && !_closing;
-        ModuleImportButton.IsEnabled = !_busy && _initialized && !_closing;
-        RollbackButton.IsEnabled = !_busy && _store.PreviousSelection.IsComplete && _store.PreviousSelection.Modules.All(module => module.IsAvailable);
+        ModuleImportButton.IsEnabled = !_busy && _initialized && !_closing && !_store.IsReadOnly;
+        RollbackButton.IsEnabled = !_busy && !_store.IsReadOnly && _store.PreviousSelection.IsComplete && _store.PreviousSelection.Modules.All(module => module.IsAvailable);
         SaveButton.IsEnabled = !_busy && _initialized;
         AutoStartBox.IsEnabled = !_busy && _initialized;
         StartWithSteamVrBox.IsEnabled = !_busy && _initialized && _configureSteamVrAutoLaunch is not null;
@@ -368,10 +370,10 @@ public partial class MainWindow : Window
             (release.IsAvailable ? InstructionsFor(release) + (IsOlderBaballoniaModule(release) ? "\nExpressions Alpha needs module 3.2.0 or newer for eye tracking." : "") : "Restore or re-import this module, or remove its profile. Your other modules are available.") + SourceAssignmentHint(release),
             SourceSelectionLabel(release),
             _store.Selection.IsSelected(release.Id),
-            !_busy && _initialized && release.IsAvailable && !_store.Selection.IsSelected(release.Id),
-            !_busy && _initialized,
+            !_busy && _initialized && !_store.IsReadOnly && release.IsAvailable && !_store.Selection.IsSelected(release.Id),
+            !_busy && _initialized && !_store.IsReadOnly,
             release.IsAvailable && IsOlderBaballoniaModule(release) ? Visibility.Visible : Visibility.Collapsed,
-            !_busy && _initialized && release.IsAvailable && IsOlderBaballoniaModule(release),
+            !_busy && _initialized && !_store.IsReadOnly && release.IsAvailable && IsOlderBaballoniaModule(release),
             release.Id == _pendingRemovalId ? Visibility.Visible : Visibility.Collapsed,
             _store.Selection.IsSelected(release.Id) ? "Remove this profile and its module settings? The bridge will stop." : "Remove this profile and its module settings?")).ToArray();
     }
@@ -382,7 +384,7 @@ public partial class MainWindow : Window
     }
     private void RefreshDownloadChoices()
     {
-        var available = !_busy && _initialized;
+        var available = !_busy && _initialized && !_store.IsReadOnly;
         var installedKinds = _store.Installed.Where(release => release.IsAvailable).Select(release => release.Kind).ToHashSet();
         var choices = new[] {
             new DownloadCard(ModuleKind.BabbleHeadsetRuntime, "Headset Runtime / BFR", "Baballonia module 4.0.0 · headset input", "https://github.com/Project-Babble/Baballonia/releases/tag/vrcft-module-4.0.0", available),
@@ -503,6 +505,7 @@ public partial class MainWindow : Window
 
     private async Task DownloadModuleCore(ModuleKind kind, ModuleRelease? upgradeFrom = null, bool activateUpgrade = false) => await RunOperation(async () =>
     {
+        EnsureModuleLibraryWritable();
         using var cancellation = new CancellationTokenSource();
         _downloadCancellation = cancellation;
         var name = ModuleCatalog.Get(kind).Name;
@@ -584,6 +587,7 @@ public partial class MainWindow : Window
 
     private async Task RemoveModule(ModuleRelease release)
     {
+        EnsureModuleLibraryWritable();
         var selected = _store.Selection.IsSelected(release.Id);
         var previousSelection = _store.Selection;
         var wasRunning = _running;
@@ -988,6 +992,7 @@ public partial class MainWindow : Window
 
     private async Task ImportModulePackage(string zipPath, ModuleKind? requestedKind = null, bool activate = true, ModuleRelease? upgradeFrom = null)
     {
+        EnsureModuleLibraryWritable();
         if (activate) SetState("Checking module", "Validating the module before switching…", false);
         if (!activate && upgradeFrom is null && requestedKind is { } kind)
         {

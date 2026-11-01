@@ -3,18 +3,29 @@
 Run `dotnet run --project tests/Kitty.Tests -c Release`.
 
 Relay uses a real causal Transformer over the last 32 observation tokens:
-22 normalized features per token, width 96, two pre-LayerNorm blocks, six
-scaled dot-product attention heads of width 16, and a 192-unit GELU feed-forward
+22 normalized features per token, width 256, two pre-LayerNorm blocks, eight
+scaled dot-product attention heads of width 32, and a 512-unit GELU feed-forward
 layer in each block. Fixed sinusoidal positional encoding represents order.
 Separate softmax heads produce 35 behavior preferences and five attention modes:
-cursor, environment, self, rest, and remembered interests. There are 155,848
-trained float32 parameters (623,392 bytes), plus 12,288 bytes of positional data.
+cursor, environment, self, rest, and remembered interests. There are 1,070,888
+trained float32 parameters (4,283,552 bytes), plus 32,768 bytes of positional data.
 The app evaluates it directly in C# with reusable buffers and no inference
-package, Python installation, GPU, network, or model download.
+package, Python installation, GPU, network, or model download. The interface uses
+one background inference job at a time. Context remains owned by the controller;
+a worker receives a fixed snapshot and cannot mutate live memories. Jobs never
+queue up. Results from an obsolete generation or older than 750ms of active
+controller time are dropped, and worker errors are observed safely. Tests can
+use synchronous inference for deterministic numerical comparisons.
 
 This is imitation learning over original synthetic temporal episodes. It does
-not understand language or have conscious thoughts. All training is done during
-development; petting changes bounded simulated familiarity, not neural weights.
+not understand language or have conscious thoughts. The original backbone is
+trained during development and stays fixed. A separate 40-value personal head
+adapter continues learning locally from calm positive petting/handling through
+bounded cross-entropy SGD updates. These are additive logit biases for 35 action
+and five attention scores; they alter normalized model probabilities without
+retraining the million-parameter backbone. Pokes are not explicit dislike labels.
+Learning requires enough elapsed positive contact, is limited to one update per
+second, and clamps every bias to ±0.8. There is no cloud training or raw event log.
 The training script exports the model and Python golden predictions. Numerical
 parity checks compare C# against those exported sequences, including variable
 context lengths and a full rolling window. Synthetic teacher agreement does not
@@ -22,8 +33,8 @@ measure real-cat fidelity or prove intelligence.
 
 The policy uses a nominal 5 Hz cadence during active simulated time. Controller
 tick quantization can change individual intervals; it never replays missed
-inferences in a catch-up burst. Its 32-token window covers about 6.4 seconds. Contact can interrupt a routine without
-creating extra inference bursts. The first observation initializes the policy.
+inferences in a catch-up burst. Its 32-token window covers about 6.4 seconds.
+Contact can interrupt a routine without creating extra inference bursts. The first observation initializes the policy.
 The window is bounded; observations older than its capacity are discarded.
 
 Optional local memory contains individual playfulness, sociability and caution,
@@ -34,11 +45,13 @@ after a startle, and a reunion. Repeated meaningful episodes can reinforce them
 at bounded intervals; callbacks without elapsed active time cannot farm them.
 These summaries influence preferences and existing model features, so they can
 change later behavior. They do not constitute conscious or autobiographical
-human memory. Familiarity grows without changing the trained model weights.
+human memory. Familiarity and the small personal adapter grow while the trained
+backbone remains unchanged. The 40 learned bias values and update count are
+saved separately in the existing compatible local-memory schema.
 It contains no cursor coordinates, raw pointer log, or messages. Context loads
 before the next policy decision; old context is discarded by the memory store
-while longer-term familiarity survives. The neural weights remain fixed. The
-companion still starts off each launch. Reset clears the Transformer sequence
+while longer-term familiarity survives. The backbone weights remain fixed; the
+small local adapter is persisted. The companion still starts off each launch. Reset clears the Transformer sequence
 and attention distribution. Store/gesture persistence checks live in their
 separate regression suites.
 
@@ -48,7 +61,10 @@ importance of an unchanging cursor. Fatigue can override continued stimulation.
 The network updates on a 200 ms context cadence and reconsiders direct contact,
 while action choices and attention commitments last several seconds. Physical
 eligibility, finite goal episodes and cooldowns turn action preferences into
-coherent activities. The public routine/stage describes the current goal:
+coherent activities. The sampler uses calibrated head probabilities directly;
+sharpening them a second time had suppressed lower-frequency hunting goals in
+the larger model. The seeded prey-play regression keeps stalking, aiming and
+pouncing reachable without forcing a hunt or altering the trained weights. The public routine/stage describes the current goal:
 
 - Hunt: swat or chase → stalk → aim with a wiggle → pounce → inspect → wash a paw.
 - Settle: circle → knead → loaf → doze → nap → stretch → yawn.
@@ -81,6 +97,8 @@ pet/poke familiarity, copied preferences, temperament identity across sessions,
 positive core episodes, callback-spam limits, comforting recovery, learned
 counterfactual history preferences, independent attention, habituation,
 fatigue/recovery, goal interruption, absent prey, nap waking, deterministic
-seeded simulations, and a measured full-context CPU/allocation budget.
+seeded simulations, actual SGD gradient direction, adapter save/load and clamps, callback-spam
+resistance, background-job delay/error/generation recovery without a UI backlog,
+and a measured full-context CPU/allocation budget.
 Controller routine tests validate explicit behavior safety; they are distinct
 from learned-policy history/parity tests.

@@ -26,9 +26,9 @@ from torch import nn
 from torch.nn import functional as F
 
 SEED = 20261101
-INPUTS, WIDTH, HEADS, FF, CONTEXT = 22, 96, 6, 192, 32
-ARCHITECTURE = 'relay-causal-transformer-156k-v1'
-TRAINED_PARAMETERS = 155848
+INPUTS, WIDTH, HEADS, FF, CONTEXT = 22, 256, 8, 512, 32
+ARCHITECTURE = 'relay-causal-transformer-1m-v1'
+TRAINED_PARAMETERS = 1070888
 NAMES = ('Watch','Walk','Chase','Swat','SmackPanel','Zoomies','Groom','Sleep','Grumpy','Stretch',
          'Sniff','Knead','Loaf','SlowBlink','LookAround','Stalk','Pounce','Rub','Scratch','Inspect',
          'Yawn','Chirp','Meow','Roll','Circle','Backoff','Peek','ButtWiggle','PawLick','FaceWash',
@@ -42,7 +42,9 @@ SCENARIOS = ('quiet_home','prey_play','repeated_cursor','gentle_contact','rapid_
  'solitary_play','social_choice','recall_play','recall_contact','recall_startle','recall_novelty',
  'mixed_play_social','mixed_novel_rest','spaced_pet_then_space','poke_then_recovery',
  'calm_handling_then_release','cat_led_social_choice','heldout_social_then_novel',
- 'heldout_play_then_startle','heldout_handling_then_play','heldout_poke_then_pet')
+ 'heldout_play_then_startle','heldout_handling_then_play','heldout_poke_then_pet',
+ 'heldout_ambient_patrol','heldout_tired_interrupted_play','heldout_uncertain_handling',
+ 'heldout_familiar_reunion')
 BASE = np.array([.78,.12,.04,.08,.15,.05,0,.3,.5,.65,.3,.25,.65,.75,.2,.05,.45,.02,.1,.15,.1,.1],dtype=np.float32)
 
 
@@ -150,7 +152,7 @@ def update_memory(memory, x):
 
 def episodes(seed,count,mixes=False,only_scenarios=None):
     rng=np.random.default_rng(seed)
-    kinds=np.array(only_scenarios if only_scenarios is not None else range(26 if mixes else 22))
+    kinds=np.array(only_scenarios if only_scenarios is not None else range(30 if mixes else 22))
     scenario=rng.choice(kinds,count)
     lengths=rng.integers(12,CONTEXT+1,count)
     x=np.zeros((count,CONTEXT,INPUTS),np.float32)
@@ -260,6 +262,23 @@ def episodes(seed,count,mixes=False,only_scenarios=None):
                 current[q,4]=.7; current[q,5]=.02; current[q,14]=.7
                 current[q,16]=.65; current[q,20]=np.where(phase[q]<.3,.6,.1)
                 current[q,7]=phase[q]; current[q,1]=.15+phase[q]*.3
+        # Entire families below are excluded from training, not just new seeds
+        # of an existing routine. They exercise conflicting needs and unfamiliar
+        # combinations of the established senses with the same universal teacher.
+        q=sel(26); current[q,4:7]=0; current[q,8]=.8; current[q,11]=.8
+        current[q,12]=.85; current[q,15]=np.where((t%9)<2,.6,.03)
+        current[q,0]=.75; current[q,1]=.15; current[q,3]=.1; current[q,7]=.6
+        q=sel(27); current[q,0]=.22; current[q,1]=.88; current[q,7]=.8
+        current[q,19]=.85; current[q,4]=.9; current[q,5]=np.where(phase[q]>.4,.7,.02)
+        current[q,3]=.15; current[q,13]=.85; current[q,2]=.08
+        q=sel(28); current[q,13]=.3+phase[q]*.25; current[q,9]=.5
+        current[q,20]=np.where(phase[q]<.55,.75,.1); current[q,6]=0
+        current[q,17]=.6*(1-phase[q]); current[q,2]=.35*(1-phase[q])
+        current[q,4]=.2; current[q,5]=.05; current[q,3]=.2*(1-phase[q])
+        q=sel(29); current[q,13]=.95; current[q,9]=.9; current[q,16]=.85
+        current[q,20]=np.where((phase[q]>.3)&(phase[q]<.6),.8,.05)
+        current[q,4]=.35; current[q,5]=.02; current[q,6]=0
+        current[q,1]=.3; current[q,0]=.65; current[q,3]=.1; current[q,2]=.01
         current=np.clip(current,0,1).astype(np.float32)
         memory=update_memory(memory,current)
         a,g=labels(current,memory,stage)
@@ -458,8 +477,9 @@ def main():
     root=Path(__file__).resolve().parent.parent
     train=episodes(SEED,args.episodes)
     valid=episodes(SEED+1000,args.validation_episodes)
-    audit=episodes(SEED+5000,args.validation_episodes)
-    unseen=episodes(SEED+6000,600,mixes=True,only_scenarios=[22,23,24,25])
+    audit=episodes(SEED+7000,args.validation_episodes)
+    unseen=episodes(SEED+8000,600,mixes=True,only_scenarios=[22,23,24,25])
+    families=episodes(SEED+9000,600,mixes=True,only_scenarios=[26,27,28,29])
     x,a,g,mask,_=train
     tensor=[torch.from_numpy(v) for v in (x,a,g,mask)]
     model=Policy()
@@ -500,7 +520,7 @@ def main():
     selected=torch.load(args.work_dir/'best.pt',map_location='cpu',weights_only=True)
     model.load_state_dict(selected['model'])
     model.eval(); audit_start=time.perf_counter()
-    heldout=metrics(model,audit); mixed=metrics(model,unseen)
+    heldout=metrics(model,audit); mixed=metrics(model,unseen); family_score=metrics(model,families)
     audit_seconds=time.perf_counter()-audit_start
     temporal=sequence_checks(model)
     assert heldout['behavior']['top1_agreement']>.78,heldout['behavior']
@@ -515,8 +535,9 @@ def main():
         'final_audit_seconds':audit_seconds,
         'training_episodes':args.episodes,'training_valid_timesteps':int(mask.sum()),
         'train_scenarios':list(SCENARIOS[:22]),'progress_validation_seed':SEED+1000,
-        'heldout_seed':SEED+5000,'unseen_mix_seed':SEED+6000,
-        'heldout':heldout,'unseen_ordered_mixtures':mixed,'temporal_validation':temporal,'history':history,
+        'heldout_seed':SEED+7000,'unseen_mix_seed':SEED+8000,'unseen_family_seed':SEED+9000,
+        'heldout':heldout,'unseen_ordered_mixtures':mixed,'unseen_families':family_score,
+        'temporal_validation':temporal,'history':history,
         'limitations':['Original synthetic teacher labels only; no real-cat dataset or measured feline cognition.',
             'Agreement measures imitation of this teacher, not intelligence, consciousness, or animal fidelity.',
             'Physical eligibility, welfare-style interaction constraints, routines and rendering remain ordinary application code.',

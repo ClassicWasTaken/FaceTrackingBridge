@@ -6,12 +6,17 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Runtime.InteropServices;
+using System.Reflection;
+using System.Security.Cryptography;
 using Microsoft.Win32.SafeHandles;
 using BabbleFrameBridge.Shared;
 using BabbleFrameBridge.App;
 
 var settingsOnly = args.Contains("--settings-only", StringComparer.Ordinal);
 var suppliedZip = args.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal)) ?? "";
+string? Option(string name) { var index = Array.IndexOf(args, name); return index >= 0 && index + 1 < args.Length ? args[index + 1] : null; }
+var etvrDll = Option("--etvr-dll");
+var baballoniaAlphaZip = Option("--baballonia-alpha-zip");
 if (!settingsOnly && !File.Exists(suppliedZip))
 {
     Console.Error.WriteLine("Pass a genuine VRCFaceTracking.Baballonia module ZIP, or use --settings-only for settings regressions.");
@@ -130,6 +135,83 @@ try
             Check(store.Installed.Count == 2, "Migration did not add a separate headset profile.");
             Check(new ModuleStore(dataRoot).Current?.Kind == ModuleKind.BaballoniaDesktop, "Migrated selection did not persist.");
         });
+        Test("legacy mixed libraries migrate Baballonia without rewriting unrelated module identities", () =>
+        {
+            var dataRoot = Path.Combine(root, "legacy-mixed-library"); var store = new ModuleStore(dataRoot);
+            var baballonia = store.Install(suppliedZip); var custom = store.Install(typeof(ModuleStore).Assembly.Location);
+            var customMetadata = Path.Combine(dataRoot, "modules", "releases", custom.Id, "release.json");
+            var before = File.ReadAllBytes(customMetadata);
+            File.WriteAllText(Path.Combine(dataRoot, "modules", "module-state.json"), JsonSerializer.Serialize(new {
+                Schema = 1, Current = custom.Id, Previous = baballonia.Id, Installed = new[] { custom.Id, baballonia.Id } }));
+            store = new ModuleStore(dataRoot); store.MigrateLegacyProfiles(TrackingInputSource.BaballoniaDesktop);
+            Check(store.Current == custom && store.Previous?.Kind == ModuleKind.BaballoniaDesktop,
+                "Legacy source migration corrupted a non-Baballonia selected module.");
+            Check(File.ReadAllBytes(customMetadata).SequenceEqual(before) && new ModuleStore(dataRoot).Current == custom,
+                "Migration rewrote the unrelated module metadata or left an unreadable library.");
+        });
+        Test("a corrupt legacy DLL cannot block migration of the selected healthy module", () =>
+        {
+            var dataRoot = Path.Combine(root, "legacy-corrupt-library"); var store = new ModuleStore(dataRoot);
+            var bad = store.Install(suppliedZip); var healthy = store.Install(typeof(ModuleStore).Assembly.Location);
+            var dll = Path.Combine(bad.DirectoryPath, bad.DllFileName); File.WriteAllBytes(dll, [1, 2, 3]);
+            File.WriteAllText(Path.Combine(dataRoot, "modules", "module-state.json"), JsonSerializer.Serialize(new {
+                Schema = 1, Current = healthy.Id, Previous = bad.Id, Installed = new[] { healthy.Id, bad.Id } }));
+            store = new ModuleStore(dataRoot); store.MigrateLegacyProfiles(TrackingInputSource.BaballoniaDesktop);
+            Check(store.Current == healthy && store.RecoveryIssues.Count > 0 && store.Installed.Count == 2,
+                "An unreadable old DLL stopped startup or discarded the healthy selected module.");
+            Check(File.ReadAllBytes(dll).SequenceEqual(new byte[] { 1, 2, 3 }) && new ModuleStore(dataRoot).Current == healthy,
+                "Migration deleted a damaged payload or produced an unreadable saved state.");
+        });
+        if (OperatingSystem.IsWindows())
+            Test("a locked legacy transport migration opens without starting the wrong source and retries later", () =>
+            {
+                var dataRoot = Path.Combine(root, "legacy-locked-metadata"); var store = new ModuleStore(dataRoot);
+                var release = store.Install(suppliedZip); var statePath = Path.Combine(dataRoot, "modules", "module-state.json");
+                File.WriteAllText(statePath, JsonSerializer.Serialize(new { Schema = 1, Current = release.Id, Previous = (string?)null }));
+                var metadataPath = Path.Combine(dataRoot, "modules", "releases", release.Id, "release.json");
+                var before = File.ReadAllBytes(statePath);
+                using (var held = new FileStream(metadataPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    store = new ModuleStore(dataRoot); store.MigrateLegacyProfiles(TrackingInputSource.BaballoniaDesktop);
+                    Check(store.Current is null && store.Installed.Count == 1 && store.RecoveryIssues.Count > 0,
+                        "A blocked legacy migration selected the wrong transport or discarded the profile.");
+                    Check(File.ReadAllBytes(statePath).SequenceEqual(before), "A blocked migration replaced the recoverable old selection.");
+                }
+                store = new ModuleStore(dataRoot); store.MigrateLegacyProfiles(TrackingInputSource.BaballoniaDesktop);
+                Check(store.Current?.Id == release.Id && store.Current.Kind == ModuleKind.BaballoniaDesktop,
+                    "Unlocking the old profile did not permit a normal migration and reopen.");
+            });
+        if (etvrDll is not null && baballoniaAlphaZip is not null)
+            Test("an old custom EyeTrackVR profile coexists with selected Baballonia 3.2 after a catalog upgrade", () =>
+            {
+                foreach (var omitAssembly in new[] { false, true })
+                {
+                    var dataRoot = Path.Combine(root, "old-custom-etvr-" + omitAssembly); var store = new ModuleStore(dataRoot);
+                    var oldEye = store.Prepare(etvrDll); store.Register(oldEye);
+                    var baballonia = store.Prepare(baballoniaAlphaZip, ModuleKind.BaballoniaDesktop); store.Activate(baballonia);
+                    var assembly = AssemblyName.GetAssemblyName(etvrDll);
+                    var identity = assembly.Name + "|" + Convert.ToHexString(assembly.GetPublicKey() ?? []);
+                    var legacyId = Guid.ParseExact(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("BabbleBridge.Module|" + identity)))[..32], "N").ToString("D");
+                    var oldMetadata = oldEye with { Kind = ModuleKind.Custom, ModuleId = legacyId, AssemblyName = omitAssembly ? null : assembly.Name };
+                    var path = Path.Combine(dataRoot, "modules", "releases", oldEye.Id, "release.json");
+                    var json = JsonSerializer.Serialize(oldMetadata); File.WriteAllText(path, json);
+                    File.WriteAllText(Path.Combine(oldEye.DirectoryPath, "ETVRModuleConfig.json"), "{\"PortNumber\":8893}");
+                    store = new ModuleStore(dataRoot);
+                    Check(store.Current == baballonia && store.Installed.Count == 2, "Old custom ETVR metadata blocked the selected Baballonia 3.2 profile.");
+                    var upgraded = store.Installed.Single(release => release.Id == oldEye.Id);
+                    Check(upgraded.Kind == ModuleKind.EyeTrackVR && upgraded.ModuleId == ModuleCatalog.Get(ModuleKind.EyeTrackVR).ModuleId,
+                        "The exact legacy assembly identity was not safely recognized as EyeTrackVR.");
+                    Check(File.ReadAllText(path) == json && File.ReadAllText(Path.Combine(oldEye.DirectoryPath, "ETVRModuleConfig.json")).Contains("8893"),
+                        "Recognizing the old module modified its metadata or input configuration.");
+                    store.SelectChannels(upgraded, baballonia);
+                    Check(new ModuleStore(dataRoot).EyeModule?.Kind == ModuleKind.EyeTrackVR
+                        && new ModuleStore(dataRoot).FaceModule == baballonia, "The recognized legacy module could not be selected and reopened as part of a pair.");
+                    File.WriteAllText(path, JsonSerializer.Serialize(oldMetadata with { ModuleId = Guid.NewGuid().ToString("D") }));
+                    store = new ModuleStore(dataRoot);
+                    Check(!store.Selection.IsComplete && store.Installed.Single() == baballonia,
+                        "A forged legacy identity bypassed validation instead of being isolated.");
+                }
+            });
         Test("removing an inactive imported profile preserves active and previous selections", () =>
         {
             var store = NewStore("remove-inactive");

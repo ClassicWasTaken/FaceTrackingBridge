@@ -12,19 +12,20 @@ var arrays = typeof(KittyModel).GetFields(BindingFlags.Static | BindingFlags.Non
 var trainedParameterCount = arrays.Where(pair => pair.Key != "PositionEncoding").Sum(pair => pair.Value.Length);
 Check(trainedParameterCount == KittyBrain.ParameterCount,
     "Transformer trainable parameter inventory changed.");
-Check(KittyBrain.ParameterCount == 155848 && trainedParameterCount is >= 100000 and <= 500000
-    && arrays.Sum(pair => pair.Value.Length) * sizeof(float) < 1000000,
+Check(KittyBrain.ParameterCount == 1070888 && trainedParameterCount is >= 1000000 and <= 1200000
+    && arrays.Sum(pair => pair.Value.Length) * sizeof(float) < 5000000,
     "The original float32 Transformer exceeded its lightweight weight budget.");
 Check(arrays.Values.All(values => values.All(float.IsFinite)), "Transformer weights contain invalid values.");
-Check(KittyBrain.LayerCount == 2 && KittyBrain.HeadCount == 6 && KittyBrain.ModelWidth == 96 && KittyBrain.FeedForwardWidth == 192 && KittyBrain.ContextLength == 32,
+Check(KittyBrain.LayerCount == 2 && KittyBrain.HeadCount == 8 && KittyBrain.ModelWidth == 256 && KittyBrain.FeedForwardWidth == 512 && KittyBrain.ContextLength == 32,
     "The causal multi-head Transformer architecture changed.");
-Check(arrays["Block0QkvWeights"].Length == 96 * 288 && arrays["Block1QkvWeights"].Length == 96 * 288
-    && arrays["PositionEncoding"].Length == 32 * 96, "Attention projections or positional encoding are absent.");
+Check(arrays["Block0QkvWeights"].Length == 256 * 768 && arrays["Block1QkvWeights"].Length == 256 * 768
+    && arrays["PositionEncoding"].Length == 32 * 256, "Attention projections or positional encoding are absent.");
 Check(Enum.GetValues<KittyAction>().Length == 35 && (int)KittyAction.Stretch == 9 && (int)KittyAction.Circle == 24 && (int)KittyAction.Startle == 34,
     "Existing actions were renumbered or the cat repertoire is incomplete.");
 
 var calm=new KittyObservation(.85,.08,0,0,0,0,0,0,0,.55,0,.25);
 if (args.Contains("--benchmark-only")) { Benchmark(); return; }
+if (args.Contains("--hunt-only")) { CheckPredatoryPlay(); Console.WriteLine($"PASS {checks} targeted predatory-play checks."); return; }
 double Mass(KittyObservation observation, params KittyAction[] actions)
 {
     var probabilities = new KittyBrain().Predict(observation);
@@ -198,7 +199,87 @@ var contactCadence = new KittyMind(91);
 for (var index = 0; index < 1000; index++) { contactCadence.Pet(.01); contactCadence.Tick(.01, default); }
 Check(contactCadence.InferenceCount is >= 49 and <= 52, "Repeated contact exceeded the5Hz Transformer context cadence.");
 
-if (args.Contains("--policy-only")) { Console.WriteLine($"PASS {checks} Transformer policy/memory checks."); return; }
+// Calm positive feedback trains a small personal head adapter by an actual
+// cross-entropy SGD step. Base model arrays stay unchanged and pokes are not labels.
+var learner = new KittyMind(502); learner.Tick(.25, new(UserPresence: 1));
+for (var index = 0; index < 3; index++) { learner.OnGentleContact(.25, .5); learner.Tick(.25, new(UserPresence: 1)); }
+var behaviorBeforeLearning = learner.BehaviorProbabilities.ToArray(); var reinforcedAction = learner.Action;
+learner.OnGentleContact(.25, .5);
+Check(learner.LearningUpdates == 1 && learner.PolicyBiases[(int)reinforcedAction] > 0,
+    "Calm positive feedback did not train the personal policy head.");
+var expectedGradient = .01 * (1 - behaviorBeforeLearning[(int)reinforcedAction]);
+Check(Math.Abs(learner.PolicyBiases[(int)reinforcedAction] - expectedGradient) < 1e-10,
+    "The online adapter did not apply the declared cross-entropy gradient.");
+Check(learner.BehaviorProbabilities[(int)reinforcedAction] > behaviorBeforeLearning[(int)reinforcedAction]
+    && Math.Abs(learner.BehaviorProbabilities.ToArray().Sum() - 1) < 1e-12,
+    "Learning did not influence the actual normalized model probabilities.");
+var learnedBias = learner.PolicyBiases.ToArray();
+for (var index = 0; index < 10000; index++) learner.Pet(1);
+Check(learner.LearningUpdates == 1 && learner.PolicyBiases.SequenceEqual(learnedBias), "Callback spam manufactured personal gradient steps.");
+for (var index = 0; index < 14; index++) { learner.Poke(); learner.Tick(.1, new(1, 0, 0, 0, 1)); }
+Check(learner.LearningUpdates == 1 && learner.PolicyBiases.SequenceEqual(learnedBias), "Pokes were treated as explicit training dislikes.");
+var savedLearning = learner.CaptureMemory(); var returnedLearner = new KittyMind(503); returnedLearner.RestoreMemory(savedLearning);
+Check(returnedLearner.LearningUpdates == 1 && returnedLearner.PolicyBiases.SequenceEqual(learnedBias), "Personal learned weights did not survive a memory restore.");
+savedLearning.PolicyBiases![0] = 99;
+Check(learner.PolicyBiases[0] != 99, "Saved personal learning arrays alias the active model adapter.");
+returnedLearner.RestoreMemory(new(PolicyBiases: Enumerable.Repeat(90d, 40).ToArray(), LearningUpdates: long.MaxValue));
+Check(returnedLearner.PolicyBiases.ToArray().All(value => value == .8) && returnedLearner.LearningUpdates == 1_000_000_000,
+    "Loaded personal learning escaped its bounded capacity.");
+returnedLearner.RestoreMemory(new(PolicyBiases: Enumerable.Repeat(double.NaN, 40).ToArray()));
+Check(returnedLearner.PolicyBiases.ToArray().All(value => value == 0) && returnedLearner.LearningUpdates == 0,
+    "Invalid personal weights introduced nonfinite inference or a bogus update count.");
+returnedLearner.RestoreMemory(new());
+Check(returnedLearner.PolicyBiases.ToArray().All(value => value == 0) && returnedLearner.LearningUpdates == 0,
+    "An older compatible memory did not default to a neutral personal adapter.");
+
+static async Task WaitForInference(KittyMind mind)
+{
+    var started = Stopwatch.StartNew();
+    while (mind.IsInferenceRunning)
+    { if (started.Elapsed > TimeSpan.FromSeconds(10)) throw new TimeoutException("The bounded policy worker did not finish."); await Task.Delay(2); }
+}
+using (var releaseInference = new ManualResetEventSlim(false))
+using (var enteredInference = new ManualResetEventSlim(false))
+{
+    var asynchronous = new KittyMind(604, backgroundInference: true);
+    asynchronous.BeforeBackgroundInference = () => { enteredInference.Set(); if (!releaseInference.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("Test worker gate expired."); };
+    asynchronous.Tick(.125, default);
+    Check(enteredInference.Wait(TimeSpan.FromSeconds(5)), "Background inference did not start independently.");
+    var uiClock = Stopwatch.StartNew();
+    for (var index = 0; index < 64; index++) asynchronous.Tick(.125, new(index % 2, 0, 0, 0, 1));
+    uiClock.Stop();
+    Check(asynchronous.InferenceCount == 1 && asynchronous.IsInferenceRunning && uiClock.Elapsed < TimeSpan.FromMilliseconds(100),
+        "A blocked policy worker delayed the controller or created a job backlog.");
+    Check(asynchronous.CaptureMemory().Context is { Length: 704 }, "Live context could not be saved safely while a policy worker was pending.");
+    releaseInference.Set(); await WaitForInference(asynchronous);
+    asynchronous.BeforeBackgroundInference = null; asynchronous.Tick(0, default);
+    Check(asynchronous.AcceptedInferenceCount == 0 && asynchronous.DroppedInferenceCount == 1,
+        "A stale policy result was accepted after a long worker delay.");
+    asynchronous.Tick(.2, default); await WaitForInference(asynchronous); asynchronous.Tick(0, default);
+    Check(asynchronous.AcceptedInferenceCount == 1 && asynchronous.PolicyError is null,
+        "A stale worker prevented the next current-context prediction from recovering.");
+}
+using (var releaseOldGeneration = new ManualResetEventSlim(false))
+{
+    var reloaded = new KittyMind(605, backgroundInference: true);
+    reloaded.BeforeBackgroundInference = () => releaseOldGeneration.Wait(TimeSpan.FromSeconds(10));
+    reloaded.Tick(.125, default); reloaded.RestoreMemory(new());
+    releaseOldGeneration.Set(); await WaitForInference(reloaded);
+    reloaded.BeforeBackgroundInference = null; reloaded.Tick(0, default);
+    Check(reloaded.DroppedInferenceCount == 1 && reloaded.AcceptedInferenceCount == 0,
+        "A policy result from before reload crossed the memory generation boundary.");
+    await WaitForInference(reloaded); reloaded.Tick(0, default);
+    Check(reloaded.AcceptedInferenceCount == 1, "A reloaded context could not produce a new valid background result.");
+}
+var failingPolicy = new KittyMind(606, backgroundInference: true) { BeforeBackgroundInference = () => throw new InvalidOperationException("Synthetic policy failure") };
+failingPolicy.Tick(.125, default); await WaitForInference(failingPolicy); failingPolicy.Tick(0, default);
+Check(failingPolicy.PolicyError?.Contains("Synthetic policy failure") == true && failingPolicy.AcceptedInferenceCount == 0,
+    "A background inference error was lost or admitted invalid probabilities.");
+failingPolicy.BeforeBackgroundInference = null; failingPolicy.Tick(.2, default); await WaitForInference(failingPolicy); failingPolicy.Tick(0, default);
+Check(failingPolicy.PolicyError is null && failingPolicy.AcceptedInferenceCount == 1, "A background error could not recover without blocking the app.");
+
+Console.WriteLine($"PASS {checks} Transformer policy, memory, online learning and asynchronous safety checks.");
+if (args.Contains("--policy-only")) return;
 
 var attentionMind=new KittyMind(11);
 var cursorTicks=0; var otherTicks=0; var focusModes=new HashSet<KittyAttention>();
@@ -242,18 +323,8 @@ Check(transitions.Contains((KittyAction.Sleep,KittyAction.Stretch)),"The nap-to-
 Check(transitions.Contains((KittyAction.Circle,KittyAction.Knead))||transitions.Contains((KittyAction.Knead,KittyAction.Loaf)),
     "The settle-to-rest sequence was not observed.");
 
-var hunting=new KittyMind(12); var hunted=new HashSet<KittyAction>();
-var huntedTransitions=new HashSet<(KittyAction,KittyAction)>(); last=hunting.Action;
-for(var i=0;i<3200;i++) {
-    var phase=i%200;
-    hunting.Tick(.125,phase<70 ? new(.85,.55,1,phase<4?1:0,1) : new(.4,0,1,0,1));
-    hunted.Add(hunting.Action);
-    if(hunting.Action!=last) { huntedTransitions.Add((last,hunting.Action)); last=hunting.Action; }
-}
-Check(hunted.Contains(KittyAction.Stalk)&&hunted.Contains(KittyAction.Pounce),"Predatory play did not include stalking and pouncing: "+string.Join(", ",hunted));
-Check(huntedTransitions.Contains((KittyAction.Stalk,KittyAction.ButtWiggle))
-    && huntedTransitions.Contains((KittyAction.ButtWiggle,KittyAction.Pounce)),"Stalk, aim and pounce episode continuity is absent.");
-Check(hunted.Contains(KittyAction.Sniff)||hunted.Contains(KittyAction.Inspect),"Novel surfaces never triggered investigation.");
+Console.WriteLine("PASS autonomous attention, fatigue, household grooming and full rest/wake routines.");
+CheckPredatoryPlay();
 var vocalActions=new HashSet<KittyAction>();
 for(var seed=0;seed<12;seed++) {
     var social=new KittyMind(seed);
@@ -263,6 +334,7 @@ for(var seed=0;seed<12;seed++) {
 }
 Check(vocalActions.Contains(KittyAction.Chirp)||vocalActions.Contains(KittyAction.Meow),"Social/play contexts never selected a vocal behavior.");
 
+Console.WriteLine("PASS predatory play continuity and varied social vocalization contexts.");
 Check(home.CompletedRoutineCount>0,"Autonomous home routines never finish.");
 Check(homeActions.Contains(KittyAction.PawLick)&&homeActions.Contains(KittyAction.FaceWash),
     "Grooming never unfolds into distinct paw and face washing stages.");
@@ -343,8 +415,24 @@ void Benchmark()
     var elapsed = Stopwatch.GetElapsedTime(started);
     var inferenceAllocation = GC.GetAllocatedBytesForCurrentThread() - allocated;
     Array.Sort(samples); var p95 = samples[(int)(samples.Length * .95)];
-    Check(p95 < 12 && elapsed.TotalMilliseconds / samples.Length < 8, "Full-context Transformer inference exceeded its nominal5Hz CPU budget.");
+    Check(p95 < 25 && elapsed.TotalMilliseconds / samples.Length < 20, "Full-context Transformer inference exceeded its nominal5Hz CPU budget.");
     Check(inferenceAllocation < 1024, "Steady-state Transformer inference allocated per-token managed objects.");
     Console.WriteLine($"PASS {checks} kitty checks; {KittyBrain.ParameterCount} trained float32 parameters / {KittyBrain.ParameterCount * sizeof(float):N0} weight bytes; "
         + $"full32-token inference mean {elapsed.TotalMilliseconds / samples.Length:F3}ms, p95 {p95:F3}ms; {inferenceAllocation} allocated bytes / {samples.Length} calls.");
+}
+
+void CheckPredatoryPlay()
+{
+    var hunting=new KittyMind(12); var hunted=new HashSet<KittyAction>();
+    var huntedTransitions=new HashSet<(KittyAction,KittyAction)>(); var last=hunting.Action;
+    for(var i=0;i<3200;i++) {
+        var phase=i%200;
+        hunting.Tick(.125,phase<70 ? new(.85,.55,1,phase<4?1:0,1) : new(.4,0,1,0,1));
+        hunted.Add(hunting.Action);
+        if(hunting.Action!=last) { huntedTransitions.Add((last,hunting.Action)); last=hunting.Action; }
+    }
+    Check(hunted.Contains(KittyAction.Stalk)&&hunted.Contains(KittyAction.Pounce),"Predatory play did not include stalking and pouncing: "+string.Join(", ",hunted));
+    Check(huntedTransitions.Contains((KittyAction.Stalk,KittyAction.ButtWiggle))
+        && huntedTransitions.Contains((KittyAction.ButtWiggle,KittyAction.Pounce)),"Stalk, aim and pounce episode continuity is absent.");
+    Check(hunted.Contains(KittyAction.Sniff)||hunted.Contains(KittyAction.Inspect),"Novel surfaces never triggered investigation.");
 }

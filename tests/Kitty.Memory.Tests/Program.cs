@@ -16,7 +16,9 @@ var packed = Enumerable.Range(0, 704).Select(i => i * 93 % 65536).ToArray();
 var core = new KittyCoreMemory(KittyCoreMemoryKind.FirstGentlePet, .7, 4, now.AddDays(-2), now);
 var memory = new KittyMemory(Affection: .78, Trust: .82, Habituation: .24, Preferences: Enumerable.Repeat(1.2, 35).ToArray(),
     Context: packed, GentleContacts: 37, Pokes: 4, Sessions: 3, IdentitySeed: 123456, Playfulness: .8,
-    Sociability: .7, Caution: .2, Bond: .6, PositiveContactSeconds: 120, CoreMemories: [core]);
+    Sociability: .7, Caution: .2, Bond: .6, PositiveContactSeconds: 120, CoreMemories: [core], PolicyBiases: Enumerable.Range(0, 40).Select(index => (index - 20) / 40d).ToArray(),
+    LearningUpdates: 123, MotionPreferences: Enumerable.Repeat(.6, 6).ToArray(), MotionMastery: Enumerable.Repeat(.4, 6).ToArray(),
+    MotionPrototypes: Enumerable.Repeat(.3, 30).ToArray(), MotionPractice: Enumerable.Repeat(21L, 6).ToArray(), MotionKnownMask: 63);
 Check(store.Save(memory), "A valid memory failed to save.");
 Check(new FileInfo(store.FilePath).Length <= KittyMemoryStore.MaximumBytes, "A maximum context exceeded the hard file budget.");
 var firstBytes = File.ReadAllBytes(store.FilePath);
@@ -26,6 +28,10 @@ Check(restored.IdentitySeed == 123456 && restored.Playfulness == .8 && restored.
 Check(restored.CoreMemories is { Length: 1 } && restored.CoreMemories[0] == core, "A positive core memory was not retained.");
 Check(restored.Context!.SequenceEqual(packed) && restored.Preferences!.SequenceEqual(memory.Preferences!), "Context or preferences did not round-trip.");
 Check(restored.SavedAtUtc == now, "Saving did not record its UTC time.");
+Check(restored.PolicyBiases!.SequenceEqual(memory.PolicyBiases!) && restored.LearningUpdates == 123, "Actual learned policy weights/count were not persisted.");
+Check(restored.MotionPreferences!.SequenceEqual(memory.MotionPreferences!) && restored.MotionPrototypes!.Length == 30
+    && restored.MotionPractice!.All(value => value == 21) && restored.MotionKnownMask == 63, "Procedural skill learning did not round-trip.");
+
 Check(File.ReadAllBytes(store.FilePath).SequenceEqual(firstBytes), "Reading rewrote the save.");
 clock = now.AddMinutes(31);
 var stale = store.Load();
@@ -50,6 +56,22 @@ Check(bounded.GentleContacts == KittyMemoryStore.MaximumCounter && bounded.Pokes
 Check(bounded.Preferences!.All(value => value == 1.5) && bounded.Context is null, "Bad preference/context dimensions were accepted.");
 Check(bounded.CoreMemories is { Length: 2 } && bounded.CoreMemories[0].Strength == 1, "Core-memory validation failed enum/duplicate/strength bounds.");
 Check(bounded.CoreMemories![1].Reinforcements == 1 && bounded.CoreMemories[1].FirstUtc is null, "Invalid core timestamps/reinforcements were accepted.");
+var biasBounded = KittyMemoryStore.Normalize(memory with { PolicyBiases = Enumerable.Repeat(99d, 40).ToArray(), LearningUpdates = long.MaxValue }, now);
+Check(biasBounded.PolicyBiases!.All(value => value == .8) && biasBounded.LearningUpdates == KittyMemoryStore.MaximumCounter,
+    "Saved online learning escaped its weight/count limits.");
+var biasInvalid = KittyMemoryStore.Normalize(memory with { PolicyBiases = Enumerable.Repeat(double.NaN, 40).ToArray() }, now);
+Check(biasInvalid.PolicyBiases!.All(value => value == 0), "Nonfinite learned biases were retained.");
+Check(KittyMemoryStore.Normalize(memory with { PolicyBiases = [1] }, now).PolicyBiases is null, "A wrong-size adapter was accepted.");
+var motionBounded = KittyMemoryStore.Normalize(memory with { MotionPreferences = Enumerable.Repeat(99d, 6).ToArray(), MotionPractice = Enumerable.Repeat(long.MaxValue, 6).ToArray() }, now);
+Check(motionBounded.MotionPreferences!.All(value => value == 1) && motionBounded.MotionPractice!.All(value => value == 1_000_000),
+    "Motion learning escaped its practical range.");
+var motionInvalid = KittyMemoryStore.Normalize(memory with { MotionMastery = [1] }, now);
+Check(motionInvalid.MotionPreferences is null && motionInvalid.MotionMastery is null && motionInvalid.MotionPrototypes is null
+    && motionInvalid.MotionPractice is null && motionInvalid.MotionKnownMask == 34 && motionInvalid.Trust == memory.Trust
+    && motionInvalid.PolicyBiases!.SequenceEqual(memory.PolicyBiases!), "A corrupt skill record damaged unrelated personal memories or partially restored invalid motion.");
+var oldCompatible = KittyMemoryStore.Normalize(new(Trust: .8), now);
+Check(oldCompatible.Trust == .8 && oldCompatible.PolicyBiases is null && oldCompatible.LearningUpdates == 0
+    && oldCompatible.MotionKnownMask == 34, "An old profile could not acquire neutral new learning fields.");
 var huge = memory with { Context = Enumerable.Repeat(65535, 22 * 10000).ToArray(), CoreMemories = Enumerable.Repeat(core, 10000).ToArray(), SavedAtUtc = now };
 var limited = KittyMemoryStore.Normalize(huge, now);
 Check(limited.Context is null && limited.CoreMemories!.Length == 1, "Unbounded arrays escaped validation.");

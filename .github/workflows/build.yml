@@ -59,6 +59,9 @@ jobs:
       - name: Check local kitty memory persistence and pet gestures
         run: dotnet run --project tests/Kitty.Memory.Tests -c Release
 
+      - name: Check learned procedural kitty motion
+        run: dotnet run --project tests/Kitty.Motion.Tests -c Release
+
       - name: Check silent kitty captions and expiry
         run: dotnet run --project tests/Kitty.Caption.Tests -c Release
 

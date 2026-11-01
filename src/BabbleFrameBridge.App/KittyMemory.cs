@@ -13,7 +13,10 @@ public sealed record KittyMemory(int Schema = 1, double Affection = .55, double 
     int[]? Context = null, DateTimeOffset? SavedAtUtc = null,
     long GentleContacts = 0, long Pokes = 0, long Sessions = 0,
     int IdentitySeed = 0, double Playfulness = .6, double Sociability = .6, double Caution = .5,
-    double Bond = 0, double PositiveContactSeconds = 0, KittyCoreMemory[]? CoreMemories = null);
+    double Bond = 0, double PositiveContactSeconds = 0, KittyCoreMemory[]? CoreMemories = null,
+    double[]? PolicyBiases = null, long LearningUpdates = 0,
+    double[]? MotionPreferences = null, double[]? MotionMastery = null,
+    double[]? MotionPrototypes = null, long[]? MotionPractice = null, int MotionKnownMask = 34);
 
 public enum KittyCoreMemoryKind { FirstGentlePet, CalmPickup, SharedPlay, ComfortAfterStartle, Reunion }
 public sealed record KittyCoreMemory(KittyCoreMemoryKind Kind, double Strength = .3, int Reinforcements = 1,
@@ -148,6 +151,10 @@ public sealed class KittyMemoryStore
             && memory.Context is { Length: > 0 and <= MaximumObservations * ObservationWidth } frames
             && frames.Length % ObservationWidth == 0 && frames.All(value => value is >= 0 and <= 65535)
             ? frames.ToArray() : null;
+        var motionValid = memory.MotionPreferences is { Length: 6 } motionPreferences && motionPreferences.All(double.IsFinite)
+            && memory.MotionMastery is { Length: 6 } motionMastery && motionMastery.All(double.IsFinite)
+            && memory.MotionPrototypes is { Length: 30 } motionPrototypes && motionPrototypes.All(double.IsFinite)
+            && memory.MotionPractice is { Length: 6 } && memory.MotionKnownMask is >= 0 and <= 63;
         return memory with
         {
             Affection = Unit(memory.Affection, .55), Trust = Unit(memory.Trust, .65),
@@ -158,6 +165,14 @@ public sealed class KittyMemoryStore
             Pokes = Math.Clamp(memory.Pokes, 0, MaximumCounter), Sessions = Math.Clamp(memory.Sessions, 0, MaximumCounter),
             Playfulness = Unit(memory.Playfulness, .6), Sociability = Unit(memory.Sociability, .6),
             Caution = Unit(memory.Caution, .5), Bond = Unit(memory.Bond, 0),
+            PolicyBiases = memory.PolicyBiases is { Length: 40 } biases
+                ? biases.Select(value => double.IsFinite(value) ? Math.Clamp(value, -.8, .8) : 0).ToArray() : null,
+            LearningUpdates = Math.Clamp(memory.LearningUpdates, 0, MaximumCounter),
+            MotionPreferences = motionValid ? memory.MotionPreferences!.Select(value => Math.Clamp(value, 0, 1)).ToArray() : null,
+            MotionMastery = motionValid ? memory.MotionMastery!.Select(value => Math.Clamp(value, 0, 1)).ToArray() : null,
+            MotionPrototypes = motionValid ? memory.MotionPrototypes!.Select(value => Math.Clamp(value, 0, 1)).ToArray() : null,
+            MotionPractice = motionValid ? memory.MotionPractice!.Select(value => Math.Clamp(value, 0L, 1_000_000L)).ToArray() : null,
+            MotionKnownMask = motionValid ? memory.MotionKnownMask : 34,
             PositiveContactSeconds = double.IsFinite(memory.PositiveContactSeconds) ? Math.Clamp(memory.PositiveContactSeconds, 0, MaximumCounter) : 0,
             CoreMemories = (memory.CoreMemories ?? []).Where(core => core is not null && Enum.IsDefined(core.Kind))
                 .Take(16).GroupBy(core => core.Kind).Select(group =>

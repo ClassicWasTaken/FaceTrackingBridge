@@ -53,14 +53,14 @@ public partial class MainWindow
             }
             finally { _syncingSources = false; }
         }
-        EyeModuleBox.IsEnabled = FaceModuleBox.IsEnabled = !_busy && _initialized && installed.Length > 0 && !_closing;
+        EyeModuleBox.IsEnabled = FaceModuleBox.IsEnabled = !_busy && _initialized && installed.Length > 0 && !_closing && !_store.IsReadOnly;
         UpdateApplySourcesButton();
     }
 
     private void UpdateApplySourcesButton()
     {
         if (ApplySourcesButton is null) return;
-        ApplySourcesButton.IsEnabled = !_busy && _initialized && !_closing
+        ApplySourcesButton.IsEnabled = !_busy && _initialized && !_closing && !_store.IsReadOnly
             && _store.Installed.Any(module => module.Id == EyeModuleBox.SelectedValue as string && module.IsAvailable)
             && _store.Installed.Any(module => module.Id == FaceModuleBox.SelectedValue as string && module.IsAvailable);
     }
@@ -95,6 +95,7 @@ public partial class MainWindow
 
     private async Task ApplyModuleSources(ModuleRelease eye, ModuleRelease face)
     {
+        EnsureModuleLibraryWritable();
         if (!eye.IsAvailable || !face.IsAvailable) throw new InvalidOperationException("A selected module’s DLL is missing. Restore or re-import it first.");
         ValidateSourcePair(_settings, eye, face);
         var previous = _store.Selection;

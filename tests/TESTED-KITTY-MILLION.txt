@@ -1,0 +1,70 @@
+FACE TRACKING BRIDGE 1.1.2 LOCAL PREVIEW - MILLION-PARAMETER KITTY
+Validated on Windows x64, 31 October 2026. Not published to GitHub.
+
+- Genuinely trained causal Transformer: 1,070,888 learned float32 parameters,
+  two blocks, width 256, eight heads, FF 512, context 32, 22 input features,
+  35 behavior and five attention outputs. Numeric data totals 4,316,320 bytes
+  including fixed positional encoding. 8,000 synthetic episodes/176,985 valid
+  decisions, 90 epochs searched, epoch 80 selected using progress validation only.
+- Exact training/provenance and three independent synthetic audit splits are
+  in docs/RELAY-TRAINING.json. The larger model improves ordinary teacher
+  agreement but does not improve every unseen activity. These metrics do not
+  measure a real cat's intelligence or behavior.
+- 2,754 full neural/controller checks passed, including 12 Python/C# numerical
+  parity sequences (maximum probability difference 2.845e-7), learned temporal
+  context, memory/bond, household routines, stalking/pouncing, interaction and
+  asynchronous-result lifetime/error/staleness guards.
+- Inference: full 32-observation mean 5.589 ms, p95 6.005 ms, zero allocations over
+  1,000 warmed calls on Ryzen 7800X3D. UI uses at most one background job with
+  no queue. A 600-tick asynchronous controller benchmark measured mean .0105 ms,
+  p95 .0062 ms with 25/25 completed jobs accepted. These are local microbenchmarks,
+  not a guarantee of VR frame time on every computer.
+- Actual ongoing personal learning uses 40 bounded output biases trained with
+  rate-limited positive-feedback SGD; the million-parameter backbone is frozen
+  during use. Updates alter normalized neural probabilities, persist locally,
+  and cannot be farmed by repeated callbacks without active elapsed time.
+- 124 memory checks passed, including backward-compatible optional learned
+  weights and motion state, finite bounds, size limits, old-schema defaults,
+  corruption/recovery, complete reset and fresh first-launch behavior.
+- Six procedural motion skills generate bounded variable trajectories and
+  learn per-skill preferences/prototypes/mastery through practice and positive
+  feedback. 10,060 math checks cover finite geometry, motion composition,
+  discovery, learning, persistence, cancellation, pause and deterministic seeds.
+- Rendering maps the generated pose into the articulated cat and applies the
+  inverse transform to pointer hit tests. Pickup/climb/perch/hidden/reduced
+  motion/layout changes cancel free-ground experiments safely.
+- A calibrated action chooser avoids sharpening neural probabilities a second
+  time; this fixed the meaningful hunt-sequence regression without changing
+  weights or weakening its seeded input/transition tests.
+- Nine sending checks passed at 90.0 Hz in the cadence sample, including jitter,
+  unchanged-value refresh, snapshot/rebind concurrency and clean cancellation.
+- Installer upgrade/removal from the previous 1.1.1 preview passed 30 isolated
+  checks. Production application identity and real user data were untouched.
+
+EXISTING APPDATA / LEGACY MODULE STARTUP
+
+- Before/after reproduction uses official Baballonia 3.2 plus EyeTrackVR stored
+  as an older custom profile. Original a62f5fc code reproduces the exact reported
+  'saved module state cannot be read' startup message. Fixed code preserves the
+  active Baballonia selection and recognizes the valid legacy EyeTrackVR entry
+  without rewriting its original metadata or configuration.
+- 54 shared/module regressions and 28 channel scenarios / 278 assertions passed.
+  These cover damaged inactive metadata, bad identities/paths, selected-profile
+  failure, schema 1 mixed/corrupt/locked migration, incomplete removal and
+  unknown future formats. Invalid entries never silently substitute a source.
+- Empty/malformed state preservation was verified before/after. Raw archives
+  accept 0..32 MiB without parsing JSON; larger unpreservable files stay untouched
+  with the library read-only. Original state is preserved before explicit repair.
+- Focused real-window startup tests cover the exact legacy pairing, recovery
+  with a healthy current module, and future-schema UI write guards. Motion tests
+  cover transformed hit targets, composed hops, pickup, saved mastery and reset.
+
+Tests use isolated profiles, official DLLs with synthetic input and loopback
+services. They do not change real modules, personal kitty memories, Windows
+preferences, live VRChat or SteamVR registration. Kitty remains silent, offline
+and off on each launch; existing memories load before active decisions.
+
+Final full-window validation passed 71 checks, including all seven catalog
+providers, custom DLLs, combined sources, the exact startup recovery, future
+read-only libraries, learned motion hit tests and saved personal learning.
+The focused startup checks also passed 3/3 after preview capture timing settled.

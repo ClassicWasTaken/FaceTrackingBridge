@@ -7,7 +7,7 @@
   #define AppPayload "..\dist\BabbleFrameBridge"
 #endif
 #ifndef AppVersion
-  #define AppVersion "1.1.1"
+  #define AppVersion "1.1.2"
 #endif
 #ifndef ReleaseGeneration
   #define ReleaseGeneration 4

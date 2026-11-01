@@ -1,18 +1,20 @@
-# Relay's tiny behavior Transformer
+# Relay's local behavior Transformer
 
 Relay uses an original, trained causal Transformer to score 35 behavior choices
 and five attention targets. It is a behavior policy, not a language model or
 a conscious animal. Ordinary application code still handles needs, routines,
 physical eligibility, animation, interaction, and persistent personal memories.
 
-The model has two pre-normalized attention blocks, width 96, six heads per
-block, feed-forward width 192, tanh-approximation GELU, and a maximum context of
+The model has two pre-normalized attention blocks, width 256, eight heads per
+block, feed-forward width 512, tanh-approximation GELU, and a maximum context of
 32 observations. Each observation retains the established 22 normalized inputs.
-The trained parameters are fixed during use: remembering interactions changes
-local context and preferences; it does not retrain neural weights.
+The core Transformer weights are fixed during use. A separate local policy
+adapter learns 40 bias parameters from interaction feedback; context, needs,
+personal preferences and procedural motion prototypes also change locally.
+This is bounded personalization, not live backpropagation through all core weights.
 
-There are 155,848 trained float32 parameters and 3,072 fixed positional values:
-635,680 numeric bytes in total. C# performs inference locally without Python,
+There are 1,070,888 trained float32 parameters and 8,192 fixed positional values:
+4,316,320 numeric bytes in total. C# performs inference locally without Python,
 PyTorch, model downloads, external services, voice output, or generated words.
 The policy runs at a nominal five decisions per second while active;
 interactions can request an immediate refresh. Rendering has its own clock.
@@ -40,6 +42,9 @@ event mixtures use separate seeds. The 1,200 held-out episodes reuse scenario
 families with new initial states, noise, duration and cue timing. An additional 600 episodes use
 four event orderings excluded from training. Exact counts and measured metrics
 are recorded in [RELAY-TRAINING.json](RELAY-TRAINING.json).
+Another 600 episodes hold out entire activity families: ambient patrol,
+tired play interruption, uncertain handling, and familiar reunion. These
+families never supply training labels or select a checkpoint.
 
 Evaluation also compares matched histories with identical final observations,
 repeated final frames, and shuffled earlier frames. This measures whether
@@ -49,15 +54,26 @@ real-cat fidelity, or consciousness.
 
 ## Measured comparison
 
-Both frozen models were audited on the same fresh examples. On the ordinary
-held-out split, behavior agreement improved from 91.27% for the 19,208-parameter
-baseline to 97.41% for this model. Attention agreement was 99.02% and 99.46%.
-On the unseen ordered mixtures, behavior agreement was 79.99% and 85.21%,
-and attention agreement was 90.96% and 95.06%. These are results from one
-training seed per architecture, not a statistical guarantee that a larger
-model is always better. The JSON report retains both models' distribution
-errors, checkpoint details and hashes. These results measure the synthetic
-teacher's design preferences; they do not measure a real cat's behavior.
+The current model and the previous frozen 155,848-parameter baseline are
+audited on exactly the same fresh examples. The JSON report retains both
+models' agreement and distribution errors, including the strict family
+holdouts. These are results from one training seed per architecture, not a
+statistical guarantee that a larger model is always better. The comparison
+measures the synthetic teacher's design preferences; it does not measure a
+real cat's behavior, intelligence, or emotions.
+
+| Synthetic audit | 155,848 parameters | 1,070,888 parameters |
+| --- | ---: | ---: |
+| Ordinary held-out behavior | 97.55% | 98.24% |
+| Ordinary held-out attention | 99.52% | 99.60% |
+| Unseen ordered-mixture behavior | 85.25% | 83.42% |
+| Unseen ordered-mixture attention | 95.57% | 94.27% |
+| Entire held-out-family behavior | 91.19% | 88.69% |
+| Entire held-out-family attention | 99.06% | 99.06% |
+
+The larger model improved ordinary held-out agreement, but generalized worse
+on these unseen activities. Parameter count alone does not establish better
+behavior, and the local feedback adapter is evaluated separately.
 
 ## Reproduction
 

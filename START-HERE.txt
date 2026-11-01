@@ -1,4 +1,4 @@
-FACE TRACKING BRIDGE 1.1.1 LOCAL PREVIEW — WINDOWS x64
+FACE TRACKING BRIDGE 1.1.2 LOCAL PREVIEW — WINDOWS x64
 
 PREREQUISITE
 Install the Microsoft Visual C++ v14 Redistributable (x64) from Microsoft:
@@ -189,8 +189,11 @@ A small profile on this computer remembers its individual temperament, trust,
 affection, activity preferences, bond and shared moments. Core memories can
 include a first gentle pet, calm handling, playing together, comfort after a
 fright and familiar reunions. Repeated meaningful positive contact can
-strengthen those memories. The base neural weights remain fixed during use;
-personal growth comes from saved behavioral state and preferences.
+strengthen those memories. The million-parameter base weights remain fixed during use. A small personal
+reaction layer learns from gentle interaction through bounded gradient updates.
+That learning, shared memories, preferences and motion practice persist locally.
+The cat can discover six motion skills and procedurally vary rollovers, hops
+and running jumps within the app. It does not generate or execute new code.
 
 The save is limited to16KB at:
   %LOCALAPPDATA%\BabbleFrameBridge\kitty-memory.json
@@ -208,6 +211,13 @@ network service or external inference runtime required. It is a simulation,
 not a language model or a scientific reproduction of a real cat's brain.
 Training uses original synthetic episodes informed by attributed feline
 behavior research. No third-party pretrained weights or mascot art is bundled.
+Older saved module profiles are checked individually when opening. Legacy
+custom EyeTrackVR entries are recognized without deleting or resetting them.
+A damaged inactive entry can be isolated while healthy modules remain usable.
+Original module files are preserved; review recovery details in Activity log.
+A library from a newer, unsupported format stays read-only until opened with a
+compatible app. Reinstalling or clearing AppData is not required for this fix.
+
 See docs/RELAY-BEHAVIOR.md, docs/RELAY-TRAINING.md and the kitty tests in the
 source for research, measured metrics, reproduction instructions and limits.
 

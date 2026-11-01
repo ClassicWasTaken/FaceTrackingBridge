@@ -8,14 +8,17 @@ physical constraints, routines, interaction handling and the animated body.
 
 ## A genuine small Transformer
 
-The policy uses two causal pre-LayerNorm Transformer blocks, six attention
-heads, a model width of 96, 192-unit feed-forward layers and sinusoidal position
-encoding. It has 155,848 trained float32 parameters and two output heads for
+The policy uses two causal pre-LayerNorm Transformer blocks, eight attention
+heads, a model width of 256, 512-unit feed-forward layers and sinusoidal position
+encoding. It has 1,070,888 trained float32 parameters and two output heads for
 35 behaviors and five attention targets: the cursor, surroundings, itself,
 rest, or remembered interests. It evaluates the last 32 normalized observations
 at a nominal 5 Hz cadence, about 6.4 seconds of recent active experience.
 
-The app runs inference in C# with reusable buffers. It needs no Python,
+The app runs inference in C# with reusable buffers and one bounded background
+job. Recent context belongs to the UI thread, and results are accepted only
+when complete, current and valid. Hiding, resetting or reloading discards old
+results. A stalled job never creates a queue or blocks the interface. It needs no Python,
 PyTorch, GPU, network account, model download or cloud service. The renderer
 continues at display refresh and blends articulated springs independently.
 
@@ -76,10 +79,16 @@ Core memories and temperament affect modeled comfort and preferences. Poking
 can create temporary annoyance and lower willingness, but space and calm contact
 allow recovery; the pet is not permanently punished or distressed by absence.
 
-Growth is saved behavioral state, not background gradient training. The base
-Transformer weights remain fixed while personal memory and preferences change.
+The million-parameter backbone remains fixed during use. A separate 40-value
+personal output layer really does learn from calm, positive interaction using
+bounded cross-entropy gradient updates. It changes behavior/attention
+probabilities without retraining the large backbone. Updates are rate-limited,
+require current neural predictions, and are saved with the companion profile.
+A single poke is not treated as a negative preference label. Both this small
+learning layer and the explicit bond, preferences and memories grow locally.
 **Settings > Relay's memory > Forget memories** resets only this companion's
-saved bond, temperament, preferences and recent context. Tracking modules,
+saved bond, temperament, preferences, learned reaction weights, motion practice
+and recent context. Tracking modules,
 connection settings and other application data are untouched.
 
 ## Petting, poking and pickup
@@ -107,6 +116,26 @@ cursor. Visual swats and panel wobble are animation only.
 Relay makes **no sound** and speaks no words. Meows, chirps, yawns, purrs and
 other cat noises appear as brief click-through text bubbles. It pauses while
 hidden or in the tray, and respects Windows reduced-motion preferences.
+
+## Discovering and composing motion
+
+Relay starts with hopping and a stretch/wave movement. Bounded practice and
+positive feedback let it discover rollovers, bounding runs, running hops and
+tumbles. A procedural motion grammar combines trajectories and varies tempo,
+height, roll timing, stride and tail motion. Learned per-skill preferences,
+mastery and motion prototypes persist between launches.
+
+The neural mind supplies the current activity, energy, temperament and social
+context; the motion controller chooses compatible experiments. Completing an
+attempt provides small practice updates. Gentle petting during a movement
+reinforces that candidate's prototype within a bounded reward budget. This is
+local procedural skill learning, not arbitrary code generation or an unlimited
+new animation vocabulary. It can generate varied motions from six known kinds.
+
+Motions stay within finite geometric limits. Pickup, climbing, perching, hiding,
+reset and insufficient space cancel a free-ground experiment. Reduced-motion
+mode keeps interaction and personal learning available without animated hops
+or spins. The cat never operates real interface controls.
 
 ## Behavior research and its scope
 

@@ -33,6 +33,7 @@ public sealed partial class HologramKittyOverlay
         if (_disposed || !_active || !CanDisplayCaption() || !HitCat(point)) return false;
         var displayed = new Point(_position.X, _position.Y - _lift);
         if (!_carry.Begin(point.X, point.Y, displayed.X, displayed.Y)) return false;
+        CancelMotion();
         _pressedPerch = IsPerched ? _perch : null;
         _perch = null; _worldMode = WorldMode.Free; _worldAge = 0;
         _position = displayed; _lift = 0; _velocity = default;
@@ -308,6 +309,7 @@ public sealed partial class HologramKittyOverlay
             _ => _mind.Action
         };
         _cat.SetInteractionPose(pose, Math.Clamp(_worldAge / Math.Max(.1, _worldDuration), 0, 1), _velocity.X, _velocity.Y);
+        ApplyMotionStyle();
         _cat.RenderFrame(action, phase, _seconds, _gaze.X, _gaze.Y, _facing, _mind.Stimulation);
     }
 

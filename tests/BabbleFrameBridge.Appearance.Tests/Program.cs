@@ -68,6 +68,12 @@ internal static class Program
         using var themes = new SystemThemeManager(app);
         try
         {
+            if (args.Contains("--module-recovery-only", StringComparer.Ordinal))
+            {
+                RunModuleStartupRecoveryTests(root, themes, renderDirectory, suppliedZip, additionalModuleDirectory, baballoniaAlphaZip);
+                Console.WriteLine($"Appearance module recovery: {passed} passed, {failed} failed.");
+                return failed == 0 ? 0 : 1;
+            }
             if (args.Contains("--kitty-memory-only", StringComparer.Ordinal))
             {
                 RunKittyMemoryTests(root, themes, renderDirectory, suppliedZip);
@@ -634,6 +640,7 @@ internal static class Program
                 finally { CloseWindow(); }
             });
 
+            RunModuleStartupRecoveryTests(root, themes, renderDirectory, suppliedZip, additionalModuleDirectory, baballoniaAlphaZip);
             RunKittyMemoryTests(root, themes, renderDirectory, suppliedZip);
 
             Test("the text-only kitty ignores legacy sound preferences without losing saved settings", () =>
@@ -3159,6 +3166,101 @@ internal static class Program
         return result;
     }
 
+    private static void RunModuleStartupRecoveryTests(string root, SystemThemeManager themes, string? renderDirectory,
+        string? moduleZip, string? additionalDirectory, string? baballoniaZip)
+    {
+        CloseWindow();
+        if (moduleZip is null) return;
+        Test("a damaged inactive module in existing AppData cannot prevent the healthy selected module from opening", () =>
+        {
+            var profile = Path.Combine(root, "startup-damaged-inactive-module");
+            new AppSettings { AutoStart = false }.Save(profile);
+            var store = new ModuleStore(profile); var damaged = store.Install(moduleZip); var healthy = store.Install(moduleZip);
+            var metadata = Path.Combine(profile, "modules", "releases", damaged.Id, "release.json");
+            File.WriteAllText(metadata, "{interrupted old module metadata");
+            var statePath = Path.Combine(profile, "modules", "module-state.json"); var state = File.ReadAllBytes(statePath);
+            try
+            {
+                window = CreateWindow(profile); themes.AttachWindow(window); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "existing mixed library opened without reinstall");
+                var loaded = Field<ModuleStore>(window, "_store");
+                Check(Named<TextBlock>(window, "PageTitle").Text == "Face Tracking Bridge"
+                    && Named<StackPanel>(window, "OverviewPage").Visibility == Visibility.Visible,
+                    "Opening a recovered profile left a stale page heading or selected page.");
+                Check(loaded.Current == healthy && loaded.Installed.Count == 1 && loaded.RecoveryIssues.Count > 0,
+                    "A damaged inactive profile discarded or blocked the healthy selected module.");
+                Check(Named<Button>(window, "StartButton").IsEnabled && Named<Button>(window, "ModuleImportButton").IsEnabled,
+                    "The recovered library could not start its valid module or import a replacement.");
+                Check(Named<Border>(window, "GlobalNotice").Visibility == Visibility.Visible,
+                    "Startup did not explain that an old module profile needs attention.");
+                Check(File.ReadAllText(metadata) == "{interrupted old module metadata" && File.ReadAllBytes(statePath).SequenceEqual(state),
+                    "Startup deleted or overwrote the user's problematic old profile.");
+                themes.ApplyTheme(true); PumpFor(TimeSpan.FromMilliseconds(350)); SavePreview(window, renderDirectory, "module-startup-recovery-dark.png");
+            }
+            finally { CloseWindow(); }
+        });
+
+        Test("a future module manifest opens for review without enabling writes or blocking ordinary settings", () =>
+        {
+            var profile = Path.Combine(root, "startup-future-library");
+            new AppSettings { AutoStart = false }.Save(profile);
+            var store = new ModuleStore(profile); var module = store.Install(moduleZip);
+            var statePath = Path.Combine(profile, "modules", "module-state.json");
+            File.Copy(statePath, statePath + ".backup", true);
+            const string future = "{\"Schema\":99,\"FutureLibrary\":\"preserve this\"}"; File.WriteAllText(statePath, future);
+            var backup = File.ReadAllBytes(statePath + ".backup");
+            try
+            {
+                window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "future library opened safely");
+                Check(Field<ModuleStore>(window, "_store").IsReadOnly && Field<ModuleStore>(window, "_store").Current == module,
+                    "The known backup was not available for review or the future state remained writable.");
+                Check(!Named<Button>(window, "ModuleImportButton").IsEnabled && !Named<Button>(window, "ApplySourcesButton").IsEnabled,
+                    "The future library enabled actions that could overwrite its state.");
+                Check(Named<Button>(window, "StartButton").IsEnabled, "Read-only recovery prevented using the already validated selected module.");
+                Named<TextBox>(window, "PortBox").Text = "19560"; Named<TextBox>(window, "ReceiveBox").Text = "19561";
+                InvokeSaveConnection();
+                Check(AppSettings.Load(profile).OutputPort == 19560, "Read-only module recovery blocked unrelated connection settings.");
+                Check(File.ReadAllText(statePath) == future && File.ReadAllBytes(statePath + ".backup").SequenceEqual(backup),
+                    "Review or connection save replaced a future module manifest.");
+            }
+            finally { CloseWindow(); }
+        });
+
+        if (additionalDirectory is null || baballoniaZip is null) return;
+        Test("an older custom ETVR module and selected Baballonia 3.2 reopen together without reinstalling", () =>
+        {
+            var profile = Path.Combine(root, "startup-old-custom-etvr");
+            new AppSettings { AutoStart = false, InputSource = TrackingInputSource.BaballoniaDesktop }.Save(profile);
+            var store = new ModuleStore(profile);
+            var dll = Path.Combine(additionalDirectory, "ETVRTrackingModule.dll");
+            var eye = store.Prepare(dll); store.Register(eye);
+            var face = store.Prepare(baballoniaZip, ModuleKind.BaballoniaDesktop); store.Activate(face);
+            var identity = AssemblyName.GetAssemblyName(dll);
+            var stable = identity.Name + "|" + Convert.ToHexString(identity.GetPublicKey() ?? []);
+            var oldId = Guid.ParseExact(Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("BabbleBridge.Module|" + stable)))[..32], "N").ToString("D");
+            var path = Path.Combine(profile, "modules", "releases", eye.Id, "release.json");
+            var oldJson = System.Text.Json.JsonSerializer.Serialize(eye with { Kind = ModuleKind.Custom, ModuleId = oldId });
+            File.WriteAllText(path, oldJson); File.WriteAllText(Path.Combine(eye.DirectoryPath, "ETVRModuleConfig.json"), "{\"PortNumber\":8893}");
+            try
+            {
+                window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "the old ETVR plus Baballonia library opened");
+                var loaded = Field<ModuleStore>(window, "_store");
+                Check(loaded.Current == face && loaded.Installed.Count == 2 && loaded.Installed.Single(module => module.Id == eye.Id).Kind == ModuleKind.EyeTrackVR,
+                    "The old custom ETVR entry prevented launch, changed selection, or lost its profile.");
+                Check(File.ReadAllText(path) == oldJson && File.ReadAllText(Path.Combine(eye.DirectoryPath, "ETVRModuleConfig.json")).Contains("8893"),
+                    "Startup reset the user's old module identity or input-port preference.");
+                Check(Named<Button>(window, "StartButton").IsEnabled && Field<object?>(window, "_worker") is null,
+                    "Recovered startup launched tracking unexpectedly or disabled the saved valid module.");
+                CloseWindow(); window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "the recovered old library reopened a second time");
+                Check(Field<ModuleStore>(window, "_store").Current == face, "The next launch regressed after a successful recovery.");
+            }
+            finally { CloseWindow(); }
+        });
+    }
+
     private static void RunKittyMemoryTests(string root, SystemThemeManager themes, string? renderDirectory, string? moduleZip)
     {
         CloseWindow();
@@ -3385,6 +3487,84 @@ internal static class Program
             finally { CloseWindow(); }
         });
 
+        Test("learned motion plans keep their rendered body hittable, cancel safely and survive a local restart", () =>
+        {
+            var profile = Path.Combine(root, "kitty-learned-motion-ui"); new AppSettings { AutoStart = false }.Save(profile);
+            var store = new KittyMemoryStore(profile);
+            var fixture = new KittyMemory(IdentitySeed: 60601, MotionKnownMask: 63,
+                MotionPreferences: Enumerable.Repeat(.65, 6).ToArray(), MotionMastery: Enumerable.Repeat(.7, 6).ToArray(),
+                MotionPrototypes: Enumerable.Repeat(.55, 30).ToArray(), MotionPractice: Enumerable.Repeat(12L, 6).ToArray());
+            Check(store.Save(fixture), "The learned-motion fixture could not save.");
+            try
+            {
+                window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "learned motion profile opened");
+                EnableKitty(window); var overlay = Named<HologramKittyOverlay>(window, "KittyOverlay");
+                var motions = Field<KittyMotionController>(overlay, "_motions");
+                var cat = Field<HologramKittyVisual>(overlay, "_cat");
+                Check(overlay.LearnedMotionCount == 6 && motions.ExportLearning().Prototypes.SequenceEqual(fixture.MotionPrototypes!),
+                    "The overlay did not restore the owner's learned motion repertoire and prototypes.");
+                var positionField = typeof(HologramKittyOverlay).GetField("_position", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                var targetField = typeof(HologramKittyOverlay).GetField("_target", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                var position = new Point(Math.Min(430, overlay.ActualWidth - 190), 260);
+                positionField.SetValue(overlay, position); targetField.SetValue(overlay, position);
+                Method(overlay, "PlaceCat").Invoke(overlay, null);
+                Check(motions.TryPlan(KittyMotionSkill.RollOver, .8, .7, .8), "The known roll-over skill could not start.");
+                for (var frame = 0; frame < 40 && Math.Abs(Field<KittyMotionPose>(overlay, "_motionPose").RollDegrees) < 100; frame++)
+                    AdvanceKittyMotion(overlay, .05);
+                var rolling = Field<KittyMotionPose>(overlay, "_motionPose");
+                Check(rolling.Active && Math.Abs(rolling.RollDegrees) >= 100, "The overlay never rendered a rolling body pose.");
+                var bitmap = new RenderTargetBitmap(144, 144, 96, 96, PixelFormats.Pbgra32); bitmap.Render(cat);
+                var head = Field<Matrix>(cat, "_headHitTransform").Transform(new Point(72, 54));
+                head = Field<Matrix>(cat, "_skillTransform").Transform(head);
+                var turn = Field<bool>(cat, "_usesRigMotion") ? cat.RigSnapshot.FacingScale : Field<double>(cat, "_facing");
+                head.X = 72 + (head.X - 72) * turn;
+                var location = Field<Point>(overlay, "_position");
+                var lifted = Field<double>(overlay, "_lift");
+                var hit = new Point(location.X + head.X, location.Y - lifted + head.Y);
+                Check(cat.ContainsBody(head) && ReferenceEquals(overlay.InputHitTest(hit), overlay),
+                    "The transformed rendered head lost its actual input hit target while rolling.");
+                var painted = new Rect(22, 5, 118, 134); painted.Transform(Field<Matrix>(cat, "_skillTransform"));
+                painted.Offset(location.X, location.Y - lifted);
+                Check(painted.Left >= 0 && painted.Top >= 0 && painted.Right <= overlay.ActualWidth && painted.Bottom <= overlay.ActualHeight,
+                    "The active rolled silhouette escaped the visible overlay.");
+                var clicks = 0; Named<Button>(window, "ImportButton").Click += (_, _) => clicks++;
+                Check(overlay.BeginPickup(hit), "The visible rolling head could not be picked up.");
+                overlay.MovePickup(hit + new Vector(16, -8));
+                Check(overlay.IsDragging && motions.CurrentSkill is null && clicks == 0,
+                    "Pickup left a procedural motion running or activated an underlying control.");
+                overlay.CancelPickup();
+                Check(!overlay.IsDragging && motions.CurrentSkill is null, "Canceling pickup restarted an interrupted roll.");
+                positionField.SetValue(overlay, position); targetField.SetValue(overlay, position);
+                Check(motions.TryPlan(KittyMotionSkill.RunningHop, .8, .7, .8), "The learned running-hop could not start.");
+                var airborneStride = false;
+                for (var frame = 0; frame < 90 && motions.CurrentSkill is not null; frame++)
+                {
+                    AdvanceKittyMotion(overlay, .05);
+                    var pose = Field<KittyMotionPose>(overlay, "_motionPose");
+                    airborneStride |= pose.Lift > 8 && Math.Abs(pose.Stride) > .15;
+                }
+                Check(airborneStride && motions.ExportLearning().Practice[(int)KittyMotionSkill.RunningHop] > 12,
+                    "The integrated running-hop did not compose stride and lift or record successful practice.");
+                var expected = motions.ExportLearning(); window.Hide();
+                Check(motions.CurrentSkill is null && Field<KittyMotionPose>(overlay, "_motionPose") == KittyMotionPose.Idle,
+                    "Hiding left an active generated trajectory running.");
+                var saved = store.Load();
+                Check(saved.MotionKnownMask == 63 && saved.MotionMastery!.SequenceEqual(expected.Mastery)
+                    && saved.MotionPrototypes!.SequenceEqual(expected.Prototypes) && saved.MotionPractice!.SequenceEqual(expected.Practice),
+                    "Saving did not retain actual motion mastery, prototypes and practice.");
+                CloseWindow(); window = CreateWindow(profile); window.Show();
+                PumpUntil(() => Field<bool>(window, "_initialized") && !Field<bool>(window, "_busy"), "motion memories reopened");
+                EnableKitty(window); overlay = Named<HologramKittyOverlay>(window, "KittyOverlay"); motions = Field<KittyMotionController>(overlay, "_motions");
+                Check(motions.ExportLearning().Prototypes.SequenceEqual(expected.Prototypes) && overlay.LearnedMotionCount == 6,
+                    "Restarting replaced the learned motion style with defaults.");
+                overlay.ForgetMemory();
+                Check(overlay.LearnedMotionCount == 2 && motions.ExportLearning().Practice.All(value => value == 0)
+                    && motions.CurrentSkill is null, "Forget retained discovered moves or practice from the previous individual.");
+            }
+            finally { CloseWindow(); }
+        });
+
         Test("reduced-motion kitty thought ticks keep input responsive and stop completely when hidden", () =>
         {
             var profile = Path.Combine(root, "kitty-memory-quiet-clock"); new AppSettings { AutoStart = false }.Save(profile);
@@ -3438,6 +3618,15 @@ internal static class Program
             now += .1;
             Method(overlay, "ProcessPointerSample").Invoke(overlay, [point, now, buttonPressed]);
         }
+    }
+
+    private static void AdvanceKittyMotion(HologramKittyOverlay overlay, double elapsed)
+    {
+        // Production resets the action's base lift before adding the procedural
+        // offset. Follow the same ordering to avoid manufacturing stacked lift.
+        Method(overlay, "UpdateMovement").Invoke(overlay, [elapsed]);
+        Method(overlay, "AdvanceMotion").Invoke(overlay, [elapsed]);
+        Method(overlay, "RenderWorldFrame").Invoke(overlay, [.5, false]);
     }
 
     private static void RenderParticlesAt(ParticleField particles, TimeSpan timestamp)

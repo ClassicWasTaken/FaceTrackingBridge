@@ -26,7 +26,7 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
     private static readonly Pen RipplePen = FrozenPen(Color.FromArgb(190, 110, 232, 255), 1.5);
     private readonly HologramKittyVisual _cat = new() { IsHitTestVisible = false };
     private readonly TranslateTransform _placement = new();
-    private KittyMind _mind = new();
+    private KittyMind _mind = new(backgroundInference: true);
     private readonly Random _random = new();
     private readonly KittyCaption _caption = new();
     private readonly DispatcherTimer _captionTimer;
@@ -89,7 +89,13 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
             var recent = _savedMemory.Context is { Length: > 0 } ? "Recent experience remembered" : "Lasting memories kept";
             var summary = $"Bond: {bond} · Shared memories: {_savedMemory.CoreMemories?.Length ?? 0} · {recent}";
             var labels = string.Join(" · ", moments);
-            return labels.Length > 0 ? summary + "\n" + labels : summary;
+            var skills = (_savedMemory.MotionKnownMask | KittyMotionController.InitialKnownMask) & 63;
+            var moves = string.Join(" · ", Enum.GetValues<KittyMotionSkill>()
+                .Where(skill => (skills & (1 << (int)skill)) != 0).Select(skill => skill switch {
+                    KittyMotionSkill.RollOver => "rollover", KittyMotionSkill.Hop => "hop",
+                    KittyMotionSkill.BoundingRun => "bounding run", KittyMotionSkill.RunningHop => "running hop",
+                    KittyMotionSkill.Tumble => "tumble", _ => "stretch and wave" }));
+            return summary + (labels.Length > 0 ? "\n" + labels : "") + "\nMoves learned: " + moves;
         }
     }
 
@@ -109,8 +115,10 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
         Dispatcher.VerifyAccess();
         if (_memoryStore is { } store && !store.Forget()) throw new IOException(store.LastError);
         CancelPickup();
+        CancelMotion(); _motions.ResetLearning();
         _memoryTimer.Stop(); _memoryDirty = _memoryEverEnabled = false;
-        _savedMemory = new(); _mind = new KittyMind(); _memoryApplied = true;
+        _mind.InvalidatePendingInference();
+        _savedMemory = new(); _mind = new KittyMind(backgroundInference: true); _memoryApplied = true;
         _lastAction = _mind.Action; _observedActionAge = _decisionAccumulator = _gentleUntil = 0;
         _petGesture.Reset();
         if (_active) EnsureMemorySession();
@@ -124,7 +132,7 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
         {
             // A new companion keeps its own initial temperament. Only a real
             // saved profile replaces it with the owner's familiar individual.
-            if (_memoryStore.LoadedExisting) _mind.RestoreMemory(_savedMemory);
+            if (_memoryStore.LoadedExisting) { _mind.RestoreMemory(_savedMemory); RestoreMotionLearning(_savedMemory); }
             _memoryApplied = true;
         }
         _savedMemory = _savedMemory with { Sessions = Math.Min(KittyMemoryStore.MaximumCounter, _savedMemory.Sessions + 1) };
@@ -144,7 +152,7 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
     {
         _memoryTimer.Stop();
         if (_memoryStore is null || !_memoryEverEnabled || !_memoryDirty) return;
-        var memory = _mind.CaptureMemory() with
+        var memory = WithMotionLearning(_mind.CaptureMemory()) with
         {
             Sessions = _savedMemory.Sessions, GentleContacts = _savedMemory.GentleContacts,
             Pokes = _savedMemory.Pokes, SavedAtUtc = DateTimeOffset.UtcNow
@@ -185,6 +193,7 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
             }
             _velocity = default;
             _lift = 0;
+            CancelMotion();
             _cat.ResetRig();
             RenderWorldFrame(.5);
             _rippleRemaining = 0;
@@ -258,6 +267,7 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
                 CompositionTarget.Rendering -= OnRendering;
                 _velocity = default;
                 _lift = 0;
+                CancelMotion();
                 _cat.ResetRig();
                 if (visible && !SystemParameters.ClientAreaAnimation) CompleteWorldWithoutMotion();
                 PlaceCat();
@@ -270,7 +280,7 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
                 InvalidateVisual();
             }
         }
-        if (!visible) { CancelPickup(); ClearCaption(); _petGesture.Reset(); SaveMemory(); }
+        if (!visible) { _mind.InvalidatePendingInference(); CancelPickup(); CancelMotion(); ClearCaption(); _petGesture.Reset(); SaveMemory(); }
         else if (animate) _captionTimer.Stop();
         if (visible && !animate)
         {
@@ -387,6 +397,7 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
         if (!_active || _carry.IsPressed || !CanDisplayCaption()) return;
         EnsureMemorySession();
         _mind.OnGentleContact(.3, .45);
+        _motions.Reinforce(.3);
         _savedMemory = _savedMemory with { GentleContacts = Math.Min(KittyMemoryStore.MaximumCounter, _savedMemory.GentleContacts + 1) };
         MarkMemoryDirty();
         _gentleUntil = _seconds + 1.2;
@@ -426,6 +437,7 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
             MarkMemoryDirty();
         }
         if (!UpdateWorld(dt)) UpdateMovement(dt);
+        AdvanceMotion(dt);
         var phase = Math.Clamp((_mind.ActionAge + _decisionAccumulator) / Math.Max(.1, _mind.ActionDuration), 0, 1);
         UpdateGaze(dt);
         if (!_carry.IsPressed && _worldMode == WorldMode.Free && !_impactSent && phase >= .4)
@@ -527,9 +539,10 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
         var speed = action switch { KittyAction.Zoomies => 420, KittyAction.Pounce => 310, KittyAction.Stalk => 42,
             KittyAction.Chase => 190, KittyAction.Swat => 140, KittyAction.Grumpy => 65, KittyAction.Circle => 60,
             KittyAction.TailChase => 150, KittyAction.Backoff => 105, KittyAction.Peek => 25, _ => 78 };
+        var motionSpeed = _motionPose.Active ? _motionPose.SpeedMultiplier : 1;
         var phase = Math.Clamp((_mind.ActionAge + _decisionAccumulator) / Math.Max(.1, _mind.ActionDuration), 0, 1);
         if (action == KittyAction.Pounce && phase < .18) desired = default;
-        var desiredVelocity = desired.Length > 1 ? desired / desired.Length * Math.Min(speed, desired.Length * 4) : default;
+        var desiredVelocity = desired.Length > 1 ? desired / desired.Length * Math.Min(speed * motionSpeed, desired.Length * 4) : default;
         var velocityChange = (desiredVelocity - _velocity) * (1 - Math.Exp(-dt * (action == KittyAction.Zoomies ? 9 : 6)));
         var changeLimit = (action == KittyAction.Zoomies ? 1500 : action is KittyAction.Pounce or KittyAction.Startle ? 1800 : 750) * dt;
         if (velocityChange.Length > changeLimit) velocityChange *= changeLimit / velocityChange.Length;
@@ -721,7 +734,9 @@ public sealed partial class HologramKittyOverlay : FrameworkElement, IDisposable
     {
         Dispatcher.VerifyAccess();
         if (_disposed) return;
+        _mind.InvalidatePendingInference();
         CancelPickup();
+        CancelMotion();
         SaveMemory();
         _memoryTimer.Stop();
         _quietMindTimer.Stop();

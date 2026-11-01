@@ -50,6 +50,8 @@ public sealed class HologramKittyVisual : FrameworkElement
     private readonly ContainerVisual _scene = new();
     private readonly DrawingVisual[] _parts = Enumerable.Range(0, 23).Select(_ => new DrawingVisual()).ToArray();
     private readonly MatrixTransform _sceneTransform = new();
+    private Matrix _skillTransform = Matrix.Identity;
+    private double _skillStride = 1, _skillTail;
     private bool _usesRigMotion;
     private Matrix _headHitTransform = Matrix.Identity;
     private readonly Matrix[] _bodyHitTransforms = new Matrix[3];
@@ -62,6 +64,15 @@ public sealed class HologramKittyVisual : FrameworkElement
     public double PoseTransitionEnergy => _poses.TransitionEnergy;
     public KittyInteractionPose InteractionPose => _interactionPose;
     public double InteractionTransitionEnergy => _interaction.TransitionEnergy;
+    public double MotionGroundLift
+    {
+        get
+        {
+            var bounds = new Rect(22, 5, 118, 134);
+            bounds.Transform(_skillTransform);
+            return Math.Clamp(bounds.Bottom - 139, 0, 70);
+        }
+    }
     public double MouthOpenness => ExpressionWeight(KittyAction.Yawn) * Math.Sin(Math.PI * Unit((_phase - .12) / .72))
         + ExpressionWeight(KittyAction.Meow) * Math.Sin(Math.PI * Unit((_phase - .12) / .55)) * .76
         + ExpressionWeight(KittyAction.Chirp) * Math.Max(0, Math.Sin(_phase * Math.PI * 3)) * .5;
@@ -88,6 +99,7 @@ public sealed class HologramKittyVisual : FrameworkElement
 
     public void ResetRig()
     {
+        SetMotionStyle();
         _rig.Reset(_facing); _poses.Reset((int)_action); _interaction.Reset();
         _interactionPose = KittyInteractionPose.None;
         _interactionProgress = _interactionVelocityX = _interactionVelocityY = 0;
@@ -101,6 +113,19 @@ public sealed class HologramKittyVisual : FrameworkElement
         _interactionProgress = Unit(progress);
         _interactionVelocityX = double.IsFinite(velocityX) ? Math.Clamp(velocityX, -700, 700) : 0;
         _interactionVelocityY = double.IsFinite(velocityY) ? Math.Clamp(velocityY, -700, 700) : 0;
+    }
+
+    /// <summary>Bounded procedural motion in the cat's own space; never changes application controls.</summary>
+    public void SetMotionStyle(double rollDegrees = 0, double stretchX = 1, double stretchY = 1,
+        double stride = 1, double tail = 0)
+    {
+        static double Bound(double value, double min, double max, double fallback) =>
+            double.IsFinite(value) ? Math.Clamp(value, min, max) : fallback;
+        _skillTransform = Matrix.Identity;
+        _skillTransform.ScaleAt(Bound(stretchX, .72, 1.28, 1), Bound(stretchY, .72, 1.28, 1), 72, 127);
+        _skillTransform.RotateAt(Bound(rollDegrees, -720, 720, 0), 72, 96);
+        _skillStride = Bound(stride, .65, 1.6, 1);
+        _skillTail = Bound(tail, -1, 1, 0);
     }
     protected override int VisualChildrenCount => 1;
     protected override Visual GetVisualChild(int index) => index == 0 ? _scene : throw new ArgumentOutOfRangeException(nameof(index));
@@ -122,7 +147,7 @@ public sealed class HologramKittyVisual : FrameworkElement
         _excitement = Unit(excitement);
         var frequency = 2 + Weight(KittyAction.Walk) * 7 + (Weight(KittyAction.Chase) + Weight(KittyAction.Circle)
             + Weight(KittyAction.Backoff)) * 13 + Weight(KittyAction.Zoomies) * 20 + Weight(KittyAction.TailChase) * 17;
-        _gaitPhase = _usesRigMotion ? _gaitPhase + _frameDelta * frequency : _time * frequency;
+        _gaitPhase = _usesRigMotion ? _gaitPhase + _frameDelta * frequency * _skillStride : _time * frequency * _skillStride;
         InvalidateVisual();
     }
 
@@ -160,7 +185,7 @@ public sealed class HologramKittyVisual : FrameworkElement
         var turn = _usesRigMotion ? _rig.Snapshot.FacingScale : _facing;
         if (Math.Abs(turn) < .08) { if (Math.Abs(x - 72) > 7) return false; x = 72; }
         else x = 72 + (x - 72) / turn;
-        var point = new Point(x, y);
+        var point = Inverse(_skillTransform, new Point(x, y));
         var head = Inverse(_headHitTransform, point);
         if (new Rect(28, 24, 88, 61).Contains(head)) return true;
         // Small margins make the thin holographic ears and paws pleasant to pet.
@@ -193,8 +218,10 @@ public sealed class HologramKittyVisual : FrameworkElement
         if (scale <= 0) return;
         var rig = _rig.Snapshot;
         var turn = _usesRigMotion ? rig.FacingScale : _facing;
-        _sceneTransform.Matrix = new Matrix(scale * turn, 0, 0, scale,
-            (ActualWidth - 144 * scale) * .5 + 72 * scale * (1 - turn), (ActualHeight - 144 * scale) * .5);
+        var scene = _skillTransform;
+        scene.Append(new Matrix(scale * turn, 0, 0, scale,
+            (ActualWidth - 144 * scale) * .5 + 72 * scale * (1 - turn), (ActualHeight - 144 * scale) * .5));
+        _sceneTransform.Matrix = scene;
         var climbing = _interaction[KittyInteractionPose.Climbing];
         var perched = _interaction[KittyInteractionPose.Perched];
         var carried = _interaction[KittyInteractionPose.Carried];
@@ -409,7 +436,8 @@ public sealed class HologramKittyVisual : FrameworkElement
     {
         var points = _tailPoints;
         points[0] = new Point(96, 111);
-        var swing = Math.Sin(_time * (2 + grumpy * 6 + running * 7 + chasing * 7 + wiggle * 12)) * (3 + grumpy * 5 + running * 2 + chasing * 4);
+        var swing = Math.Sin(_time * (2 + grumpy * 6 + running * 7 + chasing * 7 + wiggle * 12)) * (3 + grumpy * 5 + running * 2 + chasing * 4)
+            + _skillTail * Math.Sin(_gaitPhase * .5) * 5;
         for (var i = 1; i <= 8; i++)
         {
             var t = i / 8.0;
