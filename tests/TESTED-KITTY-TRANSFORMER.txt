@@ -1,5 +1,8 @@
-FACE TRACKING BRIDGE 1.1.1 LOCAL PREVIEW - RELAY VALIDATION
-Validated on Windows x64, 31 October 2026. Not published to GitHub.
+EARLIER 155K-PARAMETER RELAY PROTOTYPE VALIDATION
+Validated in the local 1.1.1 preview on Windows x64, 31 October 2026.
+This historical prototype was not published. The public 1.1.1 release uses
+the larger model documented in TESTED-KITTY-MILLION.txt; measurements and
+training details below describe the earlier prototype only.
 
 - Genuine CPU PyTorch training: 8,000 original synthetic episodes, 176,985
   valid decision frames, 90 epochs. No downloaded pretrained weights or copied

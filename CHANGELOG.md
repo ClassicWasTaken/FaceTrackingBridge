@@ -1,21 +1,19 @@
 # Changelog
 
-## 1.1.2 - Local preview, unreleased
+## 1.1.1
 
-- Relay's causal Transformer grows to 1,070,888 trained parameters. Inference runs in a bounded background job so it does not block the interface.
-- A small personal learning layer adapts from gentle petting and calm handling. Learned reactions, bond, core memories and context remain local and survive upgrades.
-- Relay can discover and practice six procedural motion skills, including rollovers, hops and hopping runs. Motion trajectories vary and learned preferences guide future practice; no code is generated.
-- Fixed startup after older module installs: legacy custom EyeTrackVR profiles are recognized safely, and a damaged inactive module no longer prevents healthy modules from opening.
-- Invalid saved entries are isolated without deleting their files. Future-format libraries open read-only instead of being overwritten, and recovery details appear in the activity log.
+Changes since **1.1.0**.
 
-## 1.1.1 - Local preview, unreleased
+- Relay now uses a dedicated causal Transformer with **1,070,888 trained parameters**, trained on original synthetic behavior sequences. Bounded background inference keeps neural decisions separate from interface rendering.
+- Individual temperament, bond, shared core memories, preferences and recent context persist locally across sessions. A small personal reaction layer learns from interaction through bounded updates; the core Transformer weights remain fixed during use.
+- Gentle cursor strokes pet Relay, brief clicks poke it, and dragging picks it up. Calm handling and positive contact can reinforce remembered experiences.
+- Relay discovers and practices six bounded procedural motion skills: rollovers, hops, bounding runs, running hops, tumbles and stretch waves. Trajectories vary, and learned prototypes and preferences guide future practice.
+- Settings shows the remembered bond and shared moments, with a way to forget only the kitty's memories. Relay remains silent, uses cat-noise text bubbles and starts off every launch.
+- Kitty memory saves are bounded and atomic; damaged or inaccessible memory does not prevent startup. Reduced-motion mode preserves interaction and memory without animated movement, and rapid pokes no longer manufacture elapsed time.
+- Fixed startup with older custom EyeTrackVR profiles whose saved identity conflicted with the newer built-in module catalog. A damaged inactive module no longer prevents healthy modules from opening.
+- Invalid saved module entries are isolated without deleting their files. Recovery preserves original manifests, future-format libraries open read-only, and details appear in the activity log.
 
-- Relay uses a dedicated causal Transformer trained on original, research-informed cat-behavior sequences.
-- A persistent individual temperament, growing bond, shared core memories, preferences and recent context load locally across sessions. No cloud or background weight training.
-- Gentle cursor strokes pet the cat; clicks poke it; dragging picks it up. Calm handling and positive contact can reinforce shared memories.
-- Settings shows the remembered bond and shared moments, with a way to forget only the kitty's memories. The kitty still starts off every launch and remains completely silent.
-- Memory saves are bounded and atomic. Corrupt or inaccessible kitty data does not prevent the bridge from opening.
-- Reduced-motion mode keeps interactions and memory working without enabling the animation loop. Rapid pokes no longer manufacture simulated elapsed time.
+[Download the Windows installer](https://github.com/ClassicWasTaken/FaceTrackingBridge/releases/download/v1.1.1/FaceTracking-Bridge-Setup.exe)
 
 ## 1.1.0
 

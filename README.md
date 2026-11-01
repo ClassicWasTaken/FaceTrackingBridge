@@ -34,7 +34,7 @@ Other compatible VRCFaceTracking SDK modules work too. `module.json` is optional
 
 Only import modules from publishers you trust: they run code on your PC under their own licenses.
 
-Windows 10/11 x64. [Setup & requirements](START-HERE.txt) · [What’s new since 1.0.4](CHANGELOG.md) · [Build from source](BUILD.txt)
+Windows 10/11 x64. [Setup & requirements](START-HERE.txt) · [What’s new](CHANGELOG.md) · [Build from source](BUILD.txt)
 
 Original code: [Apache 2.0](LICENSE). [Copyrights & third-party licenses](THIRD_PARTY_NOTICES.md).
 

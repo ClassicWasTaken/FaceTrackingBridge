@@ -1,5 +1,7 @@
-FACE TRACKING BRIDGE 1.1.2 LOCAL PREVIEW - MILLION-PARAMETER KITTY
-Validated on Windows x64, 31 October 2026. Not published to GitHub.
+FACE TRACKING BRIDGE 1.1.1 - MILLION-PARAMETER KITTY
+Validated on Windows x64, 31 October 2026. Features were tested in the local
+1.1.2 preview and are included in public release 1.1.1. Release installer
+upgrade validation is recorded separately in installer/TESTED-INSTALLER.txt.
 
 - Genuinely trained causal Transformer: 1,070,888 learned float32 parameters,
   two blocks, width 256, eight heads, FF 512, context 32, 22 input features,
@@ -38,8 +40,9 @@ Validated on Windows x64, 31 October 2026. Not published to GitHub.
   weights or weakening its seeded input/transition tests.
 - Nine sending checks passed at 90.0 Hz in the cadence sample, including jitter,
   unchanged-value refresh, snapshot/rebind concurrency and clean cancellation.
-- Installer upgrade/removal from the previous 1.1.1 preview passed 30 isolated
-  checks. Production application identity and real user data were untouched.
+- Public 1.1.0 and local 1.1.2-preview upgrade/removal to public 1.1.1 each
+  passed 35 isolated checks, including exact preservation of primary and backup
+  kitty memories. Production application identity and real user data were untouched.
 
 EXISTING APPDATA / LEGACY MODULE STARTUP
 

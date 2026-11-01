@@ -8,6 +8,7 @@ param(
     [Parameter(Mandatory)][string]$WorkDirectory,
     [Parameter(Mandatory)][string]$ModuleZip,
     [string]$PreviousPayloadDirectory,
+    [ValidateRange(0, 1000)][int]$PreviousReleaseGeneration = 0,
     [switch]$AllowSameVersionReplacement
 )
 
@@ -48,6 +49,9 @@ $steamVrSettings = Join-Path $steamVrProfile 'settings.json'
 $steamVrEvents = Join-Path $steamVrProfile 'maintenance-events.jsonl'
 $steamVrManifest = Join-Path $steamVrProfile 'steamvr/FaceTrackingBridge.vrmanifest'
 $steamVrFailure = Join-Path $steamVrProfile 'fail-command.txt'
+$kittyMemoryFiles = @((Join-Path $steamVrProfile 'kitty-memory.json'), (Join-Path $steamVrProfile 'kitty-memory.json.bak'))
+$kittyMemoryHashes = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
+$publicReleaseGeneration = 5
 $checks = [Collections.Generic.List[string]]::new()
 $failure = $null
 $initialDisplayName = if ($previousPayload) {
@@ -69,6 +73,10 @@ $generationReset = $upgradeVersion -eq '1.0.0' -and (
     ($initialDisplayName -eq 'FaceTracking Bridge' -and $initialVersion -eq '1.0.3'))
 $withdrawnReleaseReset = $previousPayload -and $upgradeVersion -eq '1.1.0' -and
     $initialVersion -eq '1.5.0' -and $initialDisplayName -eq 'Face Tracking Bridge'
+$localPreviewReset = $previousPayload -and $upgradeVersion -eq '1.1.1' -and
+    $initialVersion -eq '1.1.2' -and $initialDisplayName -eq 'Face Tracking Bridge'
+$initialReleaseGeneration = if ($PreviousReleaseGeneration -gt 0) { $PreviousReleaseGeneration }
+    elseif ($initialDisplayName -eq 'Face Tracking Bridge' -and $initialVersion -in @('1.1.0', '1.1.1', '1.1.2')) { 4 } else { 3 }
 $sameVersionReplacement = $false
 if ($AllowSameVersionReplacement) {
     if (!$previousPayload -or ([Version]$upgradeVersion -ne [Version]$initialVersion)) {
@@ -81,7 +89,7 @@ if ($AllowSameVersionReplacement) {
     }
     $sameVersionReplacement = $true
 }
-if ($previousPayload -and !$generationReset -and !$withdrawnReleaseReset -and !$sameVersionReplacement -and ([Version]$upgradeVersion -le [Version]$initialVersion)) {
+if ($previousPayload -and !$generationReset -and !$withdrawnReleaseReset -and !$localPreviewReset -and !$sameVersionReplacement -and ([Version]$upgradeVersion -le [Version]$initialVersion)) {
     throw 'PreviousPayloadDirectory must contain an older app version or an exact known public numbering-reset source.'
 }
 
@@ -117,6 +125,10 @@ function Assert-SteamVrPreferences([bool]$ExpectedOptIn) {
     Assert-True ($settings.StartMinimized -and $settings.CloseWithSteamVr) 'Installer changed unrelated launch preferences.'
     Assert-True $settings.KittyEnabled 'Installer changed the optional kitty preference.'
     Assert-True ($settings.ImportedModule -eq 'preserve-user-module') 'Installer changed the isolated imported-module fixture.'
+    foreach ($file in $kittyMemoryFiles) {
+        Assert-True (Test-Path -LiteralPath $file -PathType Leaf) 'Installer removed the primary or backup kitty memory.'
+        Assert-True ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -eq $kittyMemoryHashes[$file]) 'Installer changed the primary or backup kitty memory bytes.'
+    }
 }
 function Assert-SteamVrRefresh([string]$ExpectedPayload) {
     $events = @(Read-SteamVrEvents)
@@ -214,7 +226,7 @@ function Get-UserDataSnapshot {
     }
     return ConvertTo-Json -InputObject @($files.ToArray()) -Depth 5 -Compress
 }
-function Compile-TestInstaller([string]$Version, [string]$DisplayName = 'Face Tracking Bridge', [int]$Generation = 4) {
+function Compile-TestInstaller([string]$Version, [string]$DisplayName = 'Face Tracking Bridge', [int]$Generation = 5) {
     Write-Output "Building isolated installer $Version..."
     $iconPath = if (Test-Path -LiteralPath (Join-Path $payload 'Assets/Brand/FaceTrackingBridge-headset-v2.ico')) {
         'Assets\Brand\FaceTrackingBridge-headset-v2.ico'
@@ -271,7 +283,7 @@ function Set-TestRegistrationFixture([string]$Version, [string]$Name, [Nullable[
 }
 function Restore-CurrentRegistration {
     if (Test-Path -LiteralPath $registryKey) {
-        Set-TestRegistrationFixture $upgradeVersion 'Face Tracking Bridge' 4
+        Set-TestRegistrationFixture $upgradeVersion 'Face Tracking Bridge' $publicReleaseGeneration
     }
 }
 function Assert-AcceptedMigration([string]$Setup, [string]$Version, [string]$Name, [Nullable[int]]$Generation, [string]$Label, [string]$ExpectedVersion = $script:migrationTargetVersion) {
@@ -281,7 +293,7 @@ function Assert-AcceptedMigration([string]$Setup, [string]$Version, [string]$Nam
         Assert-True ($exitCode -eq 0) "Known migration was rejected: $Label."
         $registration = Read-TestRegistration
         Assert-True ($registration.DisplayVersion -eq $ExpectedVersion) "Migration registered the wrong target version: $Label."
-        Assert-True ((Get-ItemPropertyValue -LiteralPath $registryKey -Name BabbleBridgeReleaseGeneration) -eq 4) "Migration did not record generation 4: $Label."
+        Assert-True ((Get-ItemPropertyValue -LiteralPath $registryKey -Name BabbleBridgeReleaseGeneration) -eq $publicReleaseGeneration) "Migration did not record generation $publicReleaseGeneration`: $Label."
         Assert-InstalledPayload $payloadSource
         Assert-ForeignShortcutUnchanged
         Assert-OwnedStartShortcuts
@@ -341,6 +353,17 @@ try {
         StartWithSteamVr = $false; StartMinimized = $true; CloseWithSteamVr = $true; KittyEnabled = $true
         ImportedModule = 'preserve-user-module'
     } | ConvertTo-Json))
+    # These bounded aggregate/context saves are sibling app-data files, not
+    # installer payload. Every lifecycle assertion checks exact bytes in both.
+    foreach ($index in 0..1) {
+        $file = $kittyMemoryFiles[$index]; Assert-OwnedPath $file
+        $memory = @{ Schema = 1; IdentitySeed = 60601; Trust = .83 - .04 * $index; Bond = .62
+            Sessions = 11; GentleContacts = 34; Context = @(1..44 | ForEach-Object { $_ * 100 })
+            CoreMemories = @(@{ Kind = 0; Strength = .7; Reinforcements = 4 }) }
+        [IO.File]::WriteAllText($file, ($memory | ConvertTo-Json -Depth 6))
+        Assert-True ((Get-Item -LiteralPath $file).Length -lt 16384) 'The kitty memory fixture exceeded its normal file budget.'
+        $kittyMemoryHashes[$file] = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+    }
     $fakeMaintenanceSource = @'
 import argparse
 import hashlib
@@ -409,13 +432,13 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     $foreignLegacyHash = (Get-FileHash -LiteralPath $foreignLegacyShortcut -Algorithm SHA256).Hash
     $marker = Join-Path $payload 'installer-smoke-marker.txt'
     [IO.File]::WriteAllText($marker, 'first-release')
-    Compile-TestInstaller $initialVersion $initialDisplayName 3
+    Compile-TestInstaller $initialVersion $initialDisplayName $initialReleaseGeneration
     $firstSetup = Join-Path $compiledPath "FrameBridgeTest-$initialVersion.exe"
     $exitCode = Invoke-TestSetup $firstSetup 'install' $true
     Assert-True ($exitCode -eq 0) "First installation failed with exit code $exitCode."
     $registration = Read-TestRegistration
     Assert-True ($registration.DisplayVersion -eq $initialVersion) 'First install version is incorrect.'
-    Assert-True ($registration.BabbleBridgeReleaseGeneration -eq 3) 'The historical payload fixture did not record generation 3.'
+    Assert-True ($registration.BabbleBridgeReleaseGeneration -eq $initialReleaseGeneration) 'The historical payload fixture did not record its original release generation.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installPath 'installer-smoke-marker.txt') -Raw) -eq 'first-release') 'Initial payload marker was not installed.'
     Assert-InstalledPayload $payload
     Assert-SteamVrRefresh $payload
@@ -495,7 +518,7 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     $expectedDisplayName = 'Face Tracking Bridge'
     $registration = Read-TestRegistration
     Assert-True ($registration.DisplayVersion -eq $upgradeVersion) 'Upgrade did not update DisplayVersion.'
-    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryKey -Name BabbleBridgeReleaseGeneration) -eq 4) 'Upgrade did not register public release generation 4.'
+    Assert-True ((Get-ItemPropertyValue -LiteralPath $registryKey -Name BabbleBridgeReleaseGeneration) -eq $publicReleaseGeneration) 'Upgrade did not register the current public release generation.'
     Assert-True ((Get-Content -LiteralPath (Join-Path $installPath 'installer-smoke-marker.txt') -Raw) -eq 'upgraded-release') 'Upgrade did not replace the payload marker.'
     Assert-True (!(Test-Path -LiteralPath (Join-Path $legacyAssets 'Baballonia-module.zip'))) 'Upgrade retained the legacy baked-in archive.'
     Assert-True (!(Test-Path -LiteralPath (Join-Path $installPath 'Assets/Brand/FrameBridge-headset-v1.ico'))) 'Upgrade retained the retired green shortcut icon.'
@@ -522,7 +545,7 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     Assert-True ((Get-Content -LiteralPath (Join-Path $previousNamedGroup 'keep.txt') -Raw) -eq 'unrelated existing group content') 'Spacing-name migration removed unrelated group content.'
     Add-Check 'The real upgrade migrates owned FaceTracking Bridge Start menu shortcuts after their new replacements exist.'
     if ($generationReset) {
-        Add-Check "Known generation-2 $initialDisplayName $initialVersion migrated to $upgradeVersion and recorded generation 4."
+        Add-Check "Known generation-2 $initialDisplayName $initialVersion migrated to $upgradeVersion and recorded generation $publicReleaseGeneration."
     }
 
     # Exercise exact known reset sources and reject unknown or future builds.
@@ -545,7 +568,7 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     foreach ($legacyName in @('Frame Bridge', 'Steam Frame Babble Bridge')) {
         Assert-AcceptedMigration $migrationSetup '1.5.1' $legacyName $null ("development-" + $legacyName.Replace(' ', '-'))
     }
-    Add-Check 'Unmarked private previews and exact older development builds migrate and record generation 4.'
+    Add-Check "Unmarked private previews and exact older development builds migrate and record generation $publicReleaseGeneration."
 
     $rejectedCases = @(
         @('1.0.1', 'Babble Bridge', 3),
@@ -591,7 +614,7 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     $withdrawnResetSetup = Join-Path $compiledPath "FrameBridgeTest-$withdrawnResetVersion.exe"
     if ($upgradeVersion -ne $withdrawnResetVersion) { Compile-TestInstaller $withdrawnResetVersion }
     Assert-AcceptedMigration $withdrawnResetSetup '1.5.0' 'Face Tracking Bridge' 3 'withdrawn-150-reset' $withdrawnResetVersion
-    Add-Check 'Only the exact withdrawn Face Tracking Bridge 1.5.0 generation-3 release migrates to 1.1.0 and records generation 4.'
+    Add-Check "Only the exact withdrawn Face Tracking Bridge 1.5.0 generation-3 release migrates to 1.1.0 and records generation $publicReleaseGeneration."
     $withdrawnRejectedCases = @(
         @('1.5.0', 'Face Tracking Bridge', 4),
         @('1.5.0', 'Face Tracking Bridge', 2),
@@ -613,9 +636,35 @@ if failure.is_file() and failure.read_text(encoding="utf-8") == command:
     Assert-RejectedMigration (Join-Path $compiledPath 'FrameBridgeTest-1.1.1.exe') '1.5.0' 'Face Tracking Bridge' 3 'withdrawn-reset-exact-target-only'
     Add-Check 'A later 1.1.1 installer cannot reuse the one-time 1.5.0-to-1.1.0 migration exception.'
 
+    # The new public numbering permits only the exact local preview to migrate.
+    # Future/current generations and adjacent versions keep downgrade protection.
+    $public111Setup = Join-Path $compiledPath 'FrameBridgeTest-1.1.1.exe'
+    Assert-AcceptedMigration $public111Setup '1.1.2' 'Face Tracking Bridge' 4 'local-preview-112-to-public-111' '1.1.1'
+    Add-Check 'Only Face Tracking Bridge 1.1.2 generation 4 migrates to public 1.1.1 and records generation 5.'
+    $previewRejectedCases = @(
+        @('1.1.2', 'Face Tracking Bridge', 5), @('1.1.2', 'Face Tracking Bridge', 6),
+        @('1.1.2', 'Face Tracking Bridge', 3), @('1.1.2', 'Face Tracking Bridge', $null),
+        @('1.1.2', 'FaceTracking Bridge', 4), @('1.1.2', 'Babble Bridge', 4),
+        @('1.1.2', 'Unrelated Bridge', 4), @('1.1.3', 'Face Tracking Bridge', 4),
+        @('1.2.0', 'Face Tracking Bridge', 4), @('1.5.0', 'Face Tracking Bridge', 4)
+    )
+    $caseIndex = 0
+    foreach ($case in $previewRejectedCases) {
+        $caseIndex++
+        Assert-RejectedMigration $public111Setup $case[0] $case[1] $case[2] "reject-local-preview-$caseIndex"
+    }
+    Add-Check 'The preview migration rejects unknown products, adjacent versions, missing markers and generation-5/future downgrades without changing files.'
+    Assert-RejectedMigration $withdrawnResetSetup '1.1.2' 'Face Tracking Bridge' 4 'local-preview-cannot-reset-to-110'
+    Compile-TestInstaller '1.1.1.1'
+    Assert-RejectedMigration (Join-Path $compiledPath 'FrameBridgeTest-1.1.1.1.exe') '1.1.2' 'Face Tracking Bridge' 4 'local-preview-exact-public-target-only'
+    Add-Check 'Older 1.1.0 and later 1.1.1.1 targets cannot reuse the exact local-preview numbering exception.'
+    Compile-TestInstaller '1.1.2'
+    Assert-AcceptedMigration (Join-Path $compiledPath 'FrameBridgeTest-1.1.2.exe') '1.1.1' 'Face Tracking Bridge' 5 'normal-generation-five-update' '1.1.2'
+    Add-Check 'Normal forward updates from public 1.1.1 generation 5 remain permitted.'
+
     if (!$generationReset) {
         $downgradeSetup = $firstSetup
-        if ($sameVersionReplacement -or $withdrawnReleaseReset) {
+        if ($sameVersionReplacement -or $withdrawnReleaseReset -or $localPreviewReset) {
             # Same-version and withdrawn-release replacement both have separate
             # coverage. Use a genuinely older numeric setup for downgrade checks.
             Assert-True ([Version]$upgradeVersion -gt [Version]'0.0.0') 'A numeric downgrade fixture needs a release newer than 0.0.0.'
@@ -672,6 +721,7 @@ print(json.dumps(result, indent=2))
     Add-Check 'The isolated uninstaller removed installed app files and its test registration.'
     Add-Check 'Uninstall removed this installation''s Start menu and guide shortcuts and preserved the unrelated desktop shortcut.'
     Add-Check 'Uninstall invokes SteamVR cleanup before deleting the app, clears its automatic-launch choice, and preserves other settings and module fixtures.'
+    Add-Check 'Primary and backup kitty-memory saves remain byte-for-byte unchanged through install, reinstall, update, blocked downgrade and uninstall.'
 
     # The collision fixture is ours and was verified unchanged above. A fresh
     # lifecycle exercises the normal desktop shortcut creation and removal too.
@@ -741,7 +791,12 @@ finally {
         SameVersionReplacement = [bool]$sameVersionReplacement
         GenerationTwoReset = [bool]$generationReset
         WithdrawnReleaseReset = [bool]$withdrawnReleaseReset
-        PublicReleaseGeneration = 4
+        LocalPreviewReset = [bool]$localPreviewReset
+        InitialReleaseGeneration = $initialReleaseGeneration
+        PublicReleaseGeneration = $publicReleaseGeneration
+        KittyMemoryPreserved = $kittyMemoryHashes.Count -eq 2 -and @($kittyMemoryFiles | Where-Object {
+            !(Test-Path -LiteralPath $_ -PathType Leaf) -or (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash -ne $kittyMemoryHashes[$_]
+        }).Count -eq 0
         DevelopmentMigrationTarget = $migrationTargetVersion
         ShortcutDirectories = @($desktopIconDirectory, $groupIconDirectory)
         AvatarDiscovery = 'Not tested; existing --all-parameters diagnostic mode avoids any running VRChat client.'

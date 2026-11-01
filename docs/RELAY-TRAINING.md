@@ -16,8 +16,9 @@ This is bounded personalization, not live backpropagation through all core weigh
 There are 1,070,888 trained float32 parameters and 8,192 fixed positional values:
 4,316,320 numeric bytes in total. C# performs inference locally without Python,
 PyTorch, model downloads, external services, voice output, or generated words.
-The policy runs at a nominal five decisions per second while active;
-interactions can request an immediate refresh. Rendering has its own clock.
+The policy runs at a nominal five decisions per second while active.
+Interactions can interrupt the current goal while neural sampling remains
+bounded. Rendering has its own clock.
 
 ## Data and provenance
 

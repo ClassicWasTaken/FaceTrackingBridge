@@ -4,7 +4,11 @@ Result: PASS
 
 Isolated per-user install, reinstall, upgrade, downgrade rejection and uninstall.
 The test used a separate random application identity and workspace install and shortcut folders.
-Real application payloads tested: 1.1.1 to 1.1.2.
+Both full real-payload upgrade lifecycles passed 35 checks each (70 in total):
+- Public 1.1.0 (source 0badbef) to public 1.1.1.
+- Local-only 1.1.2 preview (source 36fef2c) to public 1.1.1.
+Both transitions preserve the installation directory and record generation 5.
+Primary and backup kitty-memory saves remained byte-for-byte unchanged.
 Shortcut collision protection and running-application install/uninstall guards were exercised.
 SteamVR hooks used an isolated fake helper; real SteamVR registration and native APIs were excluded.
 Installed-worker mapping used the existing --all-parameters diagnostic mode.
@@ -18,21 +22,26 @@ VRChat avatar discovery was excluded to avoid interference with a running local 
 - An unrelated same-name desktop shortcut survived unchecked installation and explicitly selected reinstallation.
 - Setup rejected an update while the isolated application mutex existed, before changing version or files.
 - Upgrade refreshes the same owned SteamVR registration after replacing app files and preserves the automatic-launch choice.
-- Real app binaries upgraded from 1.1.1 to 1.1.2; installed app and worker hashes match the new payload.
+- Real app binaries upgraded from 1.1.2 to 1.1.1; installed app and worker hashes match the new payload.
 - Upgrade registers the Face Tracking Bridge name with the same application identity and installation directory.
 - The real upgrade migrates owned FaceTracking Bridge Start menu shortcuts after their new replacements exist.
 - Exact generation-2 Babble Bridge 1.0.1/1.0.2 and FaceTracking Bridge 1.0.3 migrate to 1.0.0; existing 1.0.0 reinstalls normally.
-- Unmarked private previews and exact older development builds migrate and record generation 4.
+- Unmarked private previews and exact older development builds migrate and record generation 5.
 - Generation-3/future builds and unknown name/version/generation combinations are rejected without changing files or registration.
 - A later 1.0.1 installer accepts skipped-reset generation-2/preview sources and rejects the same numeric transitions after generation 3.
-- Only the exact withdrawn Face Tracking Bridge 1.5.0 generation-3 release migrates to 1.1.0 and records generation 4.
+- Only the exact withdrawn Face Tracking Bridge 1.5.0 generation-3 release migrates to 1.1.0 and records generation 5.
 - The withdrawn-release exception rejects unknown names, adjacent versions, missing markers, and generation-4/future builds without changing files.
 - A later 1.1.1 installer cannot reuse the one-time 1.5.0-to-1.1.0 migration exception.
+- Only Face Tracking Bridge 1.1.2 generation 4 migrates to public 1.1.1 and records generation 5.
+- The preview migration rejects unknown products, adjacent versions, missing markers and generation-5/future downgrades without changing files.
+- Older 1.1.0 and later 1.1.1.1 targets cannot reuse the exact local-preview numbering exception.
+- Normal forward updates from public 1.1.1 generation 5 remain permitted.
 - An older installer was rejected before changing installed version or files.
 - The installed worker passed real-module BFR discovery, exact diagnostic OSC mapping, and mode-change restart checks.
 - The isolated uninstaller removed installed app files and its test registration.
 - Uninstall removed this installation's Start menu and guide shortcuts and preserved the unrelated desktop shortcut.
 - Uninstall invokes SteamVR cleanup before deleting the app, clears its automatic-launch choice, and preserves other settings and module fixtures.
+- Primary and backup kitty-memory saves remain byte-for-byte unchanged through install, reinstall, update, blocked downgrade and uninstall.
 - SteamVR registration failure is logged without blocking installation; reinstall after uninstall requires a new automatic-launch choice.
 - Existing owned desktop shortcuts migrate without requiring the optional task; unrelated legacy-name shortcuts remain unchanged.
 - An unrelated FaceTracking Bridge desktop shortcut survives the spacing-name migration.
