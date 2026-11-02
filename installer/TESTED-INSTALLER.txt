@@ -4,11 +4,8 @@ Result: PASS
 
 Isolated per-user install, reinstall, upgrade, downgrade rejection and uninstall.
 The test used a separate random application identity and workspace install and shortcut folders.
-Both full real-payload upgrade lifecycles passed 35 checks each (70 in total):
-- Public 1.1.0 (source 0badbef) to public 1.1.1.
-- Local-only 1.1.2 preview (source 36fef2c) to public 1.1.1.
-Both transitions preserve the installation directory and record generation 5.
-Primary and backup kitty-memory saves remained byte-for-byte unchanged.
+All 35 lifecycle checks passed on 1 November 2026.
+Real application payloads tested: public 1.1.1 generation 5 to local 1.1.2 generation 5.
 Shortcut collision protection and running-application install/uninstall guards were exercised.
 SteamVR hooks used an isolated fake helper; real SteamVR registration and native APIs were excluded.
 Installed-worker mapping used the existing --all-parameters diagnostic mode.
@@ -22,7 +19,7 @@ VRChat avatar discovery was excluded to avoid interference with a running local 
 - An unrelated same-name desktop shortcut survived unchecked installation and explicitly selected reinstallation.
 - Setup rejected an update while the isolated application mutex existed, before changing version or files.
 - Upgrade refreshes the same owned SteamVR registration after replacing app files and preserves the automatic-launch choice.
-- Real app binaries upgraded from 1.1.2 to 1.1.1; installed app and worker hashes match the new payload.
+- Real app binaries upgraded from 1.1.1 to 1.1.2; installed app and worker hashes match the new payload.
 - Upgrade registers the Face Tracking Bridge name with the same application identity and installation directory.
 - The real upgrade migrates owned FaceTracking Bridge Start menu shortcuts after their new replacements exist.
 - Exact generation-2 Babble Bridge 1.0.1/1.0.2 and FaceTracking Bridge 1.0.3 migrate to 1.0.0; existing 1.0.0 reinstalls normally.

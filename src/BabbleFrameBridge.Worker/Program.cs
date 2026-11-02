@@ -39,6 +39,11 @@ internal static partial class Program
     public static async Task<int> Main(string[] args)
     {
         using var stop = new CancellationTokenSource();
+        // Acquire lazily only in a module host; release after the teardown finally.
+        // The UI and split-source coordinator never request higher timer precision.
+        using var moduleTiming = new ModuleTimerResolution(OperatingSystem.IsWindows(),
+            VRCFaceTracking.Core.Utils.TimeBeginPeriod, VRCFaceTracking.Core.Utils.TimeEndPeriod,
+            message => Emit(new { type = "log", level = "Warning", message }));
         ExtTrackingModule? module = null;
         var moduleNeedsTeardown = false;
         OscSendService? send = null;
@@ -180,6 +185,9 @@ internal static partial class Program
                 await WaitForTrackingSoftware(kind, stop.Token);
                 moduleNeedsTeardown = kind != ModuleKind.SRanipal;
             }
+            // Match VRCFaceTracking's 1 ms module timer precision. SDK modules
+            // retain their own Update pacing; output remains at its existing rate.
+            moduleTiming.Start();
             var claims = kind == ModuleKind.SRanipal
                 ? await InitializeSRanipal(module, requestEyes, requestFace, stop.Token) : module.Initialize(requestEyes, requestFace);
             moduleNeedsTeardown = true;

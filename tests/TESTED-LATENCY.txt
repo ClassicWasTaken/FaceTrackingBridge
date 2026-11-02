@@ -1,0 +1,36 @@
+FACE TRACKING BRIDGE 1.1.2 LOCAL PREVIEW - MODULE TIMING VALIDATION
+Validated on Windows x64, 1 November 2026. Not published to GitHub.
+
+- 27 timer-lifetime checks pass. Injected native API seams cover exactly one
+  matching begin/end request, repeated and concurrent lifetime calls, unused
+  coordinators, unsupported platforms, native failure, failed diagnostics,
+  and release after module initialization/update/teardown failure or cancellation.
+  These unit tests do not change Windows timer resolution themselves.
+- Nine sending checks pass, including unchanged-value refresh, snapshot safety,
+  concurrent avatar rebinding, destination changes, binary route cleanup,
+  complete packet batching, cancellation and local-only mDNS discovery.
+  The observed cadence sample measured 88.8 Hz with p95 interval 11.56 ms;
+  the requested output rate remains 90 Hz.
+- 14 simultaneous-source checks pass: role ownership, partial/offline sources,
+  stale neutralization, child crash recovery, same-module collapse, invalid
+  startup, input conflicts, orphan cleanup and bounded input-only snapshots.
+- Five official-provider scenarios pass without skips: BFR negotiation and
+  restart, Baballonia desktop, Expressions Alpha module 3.2, Steam Link,
+  and Virtual Desktop waiting/automatic connection with synthetic IPC.
+- 12 native-protocol checks and eight real-module native integration scenarios
+  pass, including byte order, pupils, eyelids, eye widen, concurrent packet
+  safety and native/legacy avatar-capability transitions.
+- 35 isolated installer lifecycle checks pass when upgrading the actual public
+  1.1.1 generation-5 payload to this local 1.1.2 preview. Settings, imported
+  modules and both kitty-memory files remain unchanged. Installation identity,
+  install directory, running-app guards, rejected downgrades and normal
+  uninstall behavior are preserved; production AppId and SteamVR are excluded.
+
+All runtime checks use isolated profiles, temporary module copies and loopback
+capture or owned synthetic IPC. Real user settings, avatar caches and live
+VRChat/SteamVR registration are not modified. The model, companion behavior
+and interface rendering were unchanged and their suites were not repeated.
+
+The input-to-output investigation, original module receipts, comparison scope,
+measurements and limitations are recorded in docs/BABALLONIA-LATENCY.md.
+Installer upgrade/removal validation is recorded in installer/TESTED-INSTALLER.txt.

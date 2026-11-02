@@ -1,0 +1,903 @@
+{
+  "client_date": "2026-11-01",
+  "scope": "Synthetic loopback OSC injection -> received VRChat output, not camera-to-avatar latency",
+  "bridge_baseline_commit": "47c767a73155dda50f5e515b3a6fafc40906de98",
+  "upstream_core_commit": "e1056bb98843dd0fd1b152f24cce3b09d0d19db4",
+  "fix": "Lazy, balanced 1 ms Windows timer-resolution lease per active module-host worker; 90 Hz output unchanged",
+  "module_310": {
+    "module_zip_sha256": "e18d293769b3f04bc98b1a75f2c49e5907e32290b58e935daa99eceab3740413",
+    "module_dll_sha256": "729ac7d101f9f8b81fd83c1ca9ec953da58b52e27063e99033cc0b578e30db3c",
+    "address_adjustment": "Only eye inputs alias /leftEyeLid and /rightEyeLid to v3.1 /LeftEyeLid and /RightEyeLid; otherwise identical benchmark.run shared path."
+  },
+  "bridge_310_clean_sequential": [
+    {
+      "mode": "shared",
+      "output": "legacy",
+      "legacy_prefix": "v2",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 14.159,
+            "median_ms": 14.384,
+            "p95_ms": 23.172,
+            "max_ms": 26.891
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 14.159,
+            "median_ms": 14.384,
+            "p95_ms": 23.172,
+            "max_ms": 26.891
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 14.159,
+            "median_ms": 14.384,
+            "p95_ms": 23.172,
+            "max_ms": 26.891
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 14.05,
+            "median_ms": 14.384,
+            "p95_ms": 23.172,
+            "max_ms": 26.891
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 14.05,
+            "median_ms": 14.384,
+            "p95_ms": 23.172,
+            "max_ms": 26.891
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 14.05,
+            "median_ms": 14.384,
+            "p95_ms": 23.172,
+            "max_ms": 26.891
+          }
+        }
+      },
+      "label": "baseline",
+      "worker_exe_sha256": "1b11d51c7b12fb272d5c4cd6cd798b1b0d530c704554ed714197f9dde4eba3ad",
+      "worker_dll_sha256": "287cad59b78167f55e2fc6011f65de59ce1d6286b3fb39e18ffcc55f8447c5e0"
+    },
+    {
+      "mode": "shared",
+      "output": "legacy",
+      "legacy_prefix": "v2",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 11.053,
+            "median_ms": 10.94,
+            "p95_ms": 18.375,
+            "max_ms": 20.543
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 11.053,
+            "median_ms": 10.94,
+            "p95_ms": 18.375,
+            "max_ms": 20.543
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 11.053,
+            "median_ms": 10.94,
+            "p95_ms": 18.375,
+            "max_ms": 20.543
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 11.163,
+            "median_ms": 11.092,
+            "p95_ms": 18.74,
+            "max_ms": 20.543
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 11.163,
+            "median_ms": 11.092,
+            "p95_ms": 18.74,
+            "max_ms": 20.543
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 11.163,
+            "median_ms": 11.092,
+            "p95_ms": 18.74,
+            "max_ms": 20.543
+          }
+        }
+      },
+      "label": "timer_candidate",
+      "worker_exe_sha256": "1b11d51c7b12fb272d5c4cd6cd798b1b0d530c704554ed714197f9dde4eba3ad",
+      "worker_dll_sha256": "bd217a66e77aabadf73c7cf0030f844b3410c4018d590afd484e70101484384e"
+    }
+  ],
+  "upstream_core_310_sequential": [
+    {
+      "implementation": "current upstream VRCFT source headless Core and sandbox (not Steam UI)",
+      "commit": "e1056bb98843dd0fd1b152f24cce3b09d0d19db4",
+      "repeat": 0,
+      "module_zip_sha256": "e18d293769b3f04bc98b1a75f2c49e5907e32290b58e935daa99eceab3740413",
+      "output": "legacy",
+      "mutator": false,
+      "mapping": "all parameters relevant; capture JawOpen and EyeOpenLeft",
+      "timer_resolution_request_ms": 1,
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 10.66,
+            "median_ms": 10.163,
+            "p95_ms": 17.307,
+            "max_ms": 19.961
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 10.66,
+            "median_ms": 10.163,
+            "p95_ms": 17.307,
+            "max_ms": 19.961
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 10.66,
+            "median_ms": 10.163,
+            "p95_ms": 17.307,
+            "max_ms": 19.961
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 10.545,
+            "median_ms": 10.101,
+            "p95_ms": 17.307,
+            "max_ms": 19.961
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 10.545,
+            "median_ms": 10.101,
+            "p95_ms": 17.307,
+            "max_ms": 19.961
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 10.545,
+            "median_ms": 10.101,
+            "p95_ms": 17.307,
+            "max_ms": 19.961
+          }
+        }
+      }
+    },
+    {
+      "implementation": "current upstream VRCFT source headless Core and sandbox (not Steam UI)",
+      "commit": "e1056bb98843dd0fd1b152f24cce3b09d0d19db4",
+      "repeat": 1,
+      "module_zip_sha256": "e18d293769b3f04bc98b1a75f2c49e5907e32290b58e935daa99eceab3740413",
+      "output": "legacy",
+      "mutator": false,
+      "mapping": "all parameters relevant; capture JawOpen and EyeOpenLeft",
+      "timer_resolution_request_ms": 1,
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 10.993,
+            "median_ms": 11.139,
+            "p95_ms": 17.595,
+            "max_ms": 19.939
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 10.993,
+            "median_ms": 11.139,
+            "p95_ms": 17.595,
+            "max_ms": 19.939
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 10.993,
+            "median_ms": 11.139,
+            "p95_ms": 17.595,
+            "max_ms": 19.939
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 10.993,
+            "median_ms": 11.139,
+            "p95_ms": 17.595,
+            "max_ms": 19.939
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 10.993,
+            "median_ms": 11.139,
+            "p95_ms": 17.595,
+            "max_ms": 19.939
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 10.993,
+            "median_ms": 11.139,
+            "p95_ms": 17.595,
+            "max_ms": 19.939
+          }
+        }
+      }
+    }
+  ],
+  "module_320": {
+    "module_zip_sha256": "1501bcf8ed1a8fb0b9d8e166ab1c95ab838c4e33d09524f2f537bf6f87d8c032",
+    "module_dll_sha256": "b85dc69b2a814d71947b4ad8d9747fd8cf50c13f335c8426a3b6a2e2ec2f8c19"
+  },
+  "bridge_320_before": [
+    {
+      "mode": "shared",
+      "output": "legacy",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 6.485,
+            "median_ms": 6.181,
+            "p95_ms": 11.057,
+            "max_ms": 52.503
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 6.485,
+            "median_ms": 6.181,
+            "p95_ms": 11.057,
+            "max_ms": 52.503
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 6.485,
+            "median_ms": 6.181,
+            "p95_ms": 11.057,
+            "max_ms": 52.503
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 6.485,
+            "median_ms": 6.181,
+            "p95_ms": 11.057,
+            "max_ms": 52.503
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 6.485,
+            "median_ms": 6.181,
+            "p95_ms": 11.057,
+            "max_ms": 52.503
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 6.485,
+            "median_ms": 6.181,
+            "p95_ms": 11.057,
+            "max_ms": 52.503
+          }
+        }
+      }
+    },
+    {
+      "mode": "shared",
+      "output": "native",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 5.971,
+            "median_ms": 5.685,
+            "p95_ms": 10.584,
+            "max_ms": 11.105
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 5.971,
+            "median_ms": 5.685,
+            "p95_ms": 10.584,
+            "max_ms": 11.105
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 5.971,
+            "median_ms": 5.685,
+            "p95_ms": 10.584,
+            "max_ms": 11.105
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 5.971,
+            "median_ms": 5.685,
+            "p95_ms": 10.584,
+            "max_ms": 11.105
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 5.971,
+            "median_ms": 5.685,
+            "p95_ms": 10.584,
+            "max_ms": 11.105
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 5.971,
+            "median_ms": 5.685,
+            "p95_ms": 10.584,
+            "max_ms": 11.105
+          }
+        }
+      }
+    },
+    {
+      "mode": "split",
+      "output": "legacy",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 14.715,
+            "median_ms": 14.895,
+            "p95_ms": 23.188,
+            "max_ms": 26.344
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 14.715,
+            "median_ms": 14.895,
+            "p95_ms": 23.188,
+            "max_ms": 26.344
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 14.715,
+            "median_ms": 14.895,
+            "p95_ms": 23.188,
+            "max_ms": 26.344
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 14.715,
+            "median_ms": 14.895,
+            "p95_ms": 23.188,
+            "max_ms": 26.344
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 14.715,
+            "median_ms": 14.895,
+            "p95_ms": 23.188,
+            "max_ms": 26.344
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 14.715,
+            "median_ms": 14.895,
+            "p95_ms": 23.188,
+            "max_ms": 26.344
+          }
+        }
+      }
+    },
+    {
+      "mode": "split",
+      "output": "native",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 13.283,
+            "median_ms": 13.389,
+            "p95_ms": 23.422,
+            "max_ms": 25.604
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 13.283,
+            "median_ms": 13.389,
+            "p95_ms": 23.422,
+            "max_ms": 25.604
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 13.283,
+            "median_ms": 13.389,
+            "p95_ms": 23.422,
+            "max_ms": 25.604
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 13.395,
+            "median_ms": 13.389,
+            "p95_ms": 23.95,
+            "max_ms": 27.198
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 13.395,
+            "median_ms": 13.389,
+            "p95_ms": 23.95,
+            "max_ms": 27.198
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 13.395,
+            "median_ms": 13.389,
+            "p95_ms": 23.95,
+            "max_ms": 27.198
+          }
+        }
+      }
+    }
+  ],
+  "bridge_320_after": [
+    {
+      "mode": "shared",
+      "output": "legacy",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 5.991,
+            "median_ms": 6.029,
+            "p95_ms": 10.655,
+            "max_ms": 11.189
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 5.991,
+            "median_ms": 6.029,
+            "p95_ms": 10.655,
+            "max_ms": 11.189
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 5.991,
+            "median_ms": 6.029,
+            "p95_ms": 10.655,
+            "max_ms": 11.189
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 5.991,
+            "median_ms": 6.029,
+            "p95_ms": 10.655,
+            "max_ms": 11.189
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 5.991,
+            "median_ms": 6.029,
+            "p95_ms": 10.655,
+            "max_ms": 11.189
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 5.991,
+            "median_ms": 6.029,
+            "p95_ms": 10.655,
+            "max_ms": 11.189
+          }
+        }
+      }
+    },
+    {
+      "mode": "shared",
+      "output": "native",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 6.089,
+            "median_ms": 6.127,
+            "p95_ms": 11.001,
+            "max_ms": 11.834
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 6.089,
+            "median_ms": 6.127,
+            "p95_ms": 11.001,
+            "max_ms": 11.834
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 6.089,
+            "median_ms": 6.127,
+            "p95_ms": 11.001,
+            "max_ms": 11.834
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 6.089,
+            "median_ms": 6.127,
+            "p95_ms": 11.001,
+            "max_ms": 11.834
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 6.089,
+            "median_ms": 6.127,
+            "p95_ms": 11.001,
+            "max_ms": 11.834
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 6.089,
+            "median_ms": 6.127,
+            "p95_ms": 11.001,
+            "max_ms": 11.834
+          }
+        }
+      }
+    },
+    {
+      "mode": "split",
+      "output": "legacy",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 11.69,
+            "median_ms": 11.286,
+            "p95_ms": 19.196,
+            "max_ms": 21.902
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 11.69,
+            "median_ms": 11.286,
+            "p95_ms": 19.196,
+            "max_ms": 21.902
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 11.69,
+            "median_ms": 11.286,
+            "p95_ms": 19.196,
+            "max_ms": 21.902
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 12.14,
+            "median_ms": 12.371,
+            "p95_ms": 18.587,
+            "max_ms": 20.678
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 12.14,
+            "median_ms": 12.371,
+            "p95_ms": 18.587,
+            "max_ms": 20.678
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 12.14,
+            "median_ms": 12.371,
+            "p95_ms": 18.587,
+            "max_ms": 20.678
+          }
+        }
+      }
+    },
+    {
+      "mode": "split",
+      "output": "native",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 11.976,
+            "median_ms": 11.839,
+            "p95_ms": 18.135,
+            "max_ms": 21.798
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 11.976,
+            "median_ms": 11.839,
+            "p95_ms": 18.135,
+            "max_ms": 21.798
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 11.976,
+            "median_ms": 11.839,
+            "p95_ms": 18.135,
+            "max_ms": 21.798
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 100,
+            "mean_ms": 12.419,
+            "median_ms": 12.707,
+            "p95_ms": 19.818,
+            "max_ms": 21.706
+          },
+          "t50": {
+            "samples": 100,
+            "mean_ms": 12.419,
+            "median_ms": 12.707,
+            "p95_ms": 19.818,
+            "max_ms": 21.706
+          },
+          "t90": {
+            "samples": 100,
+            "mean_ms": 12.419,
+            "median_ms": 12.707,
+            "p95_ms": 19.818,
+            "max_ms": 21.706
+          }
+        }
+      }
+    }
+  ],
+  "bridge_320_ft_v2_before": [
+    {
+      "mode": "shared",
+      "output": "legacy",
+      "legacy_prefix": "FT/v2",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 200,
+            "mean_ms": 6.029,
+            "median_ms": 6.128,
+            "p95_ms": 11.112,
+            "max_ms": 11.641
+          },
+          "t50": {
+            "samples": 200,
+            "mean_ms": 6.029,
+            "median_ms": 6.128,
+            "p95_ms": 11.112,
+            "max_ms": 11.641
+          },
+          "t90": {
+            "samples": 200,
+            "mean_ms": 6.029,
+            "median_ms": 6.128,
+            "p95_ms": 11.112,
+            "max_ms": 11.641
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 200,
+            "mean_ms": 6.029,
+            "median_ms": 6.128,
+            "p95_ms": 11.112,
+            "max_ms": 11.641
+          },
+          "t50": {
+            "samples": 200,
+            "mean_ms": 6.029,
+            "median_ms": 6.128,
+            "p95_ms": 11.112,
+            "max_ms": 11.641
+          },
+          "t90": {
+            "samples": 200,
+            "mean_ms": 6.029,
+            "median_ms": 6.128,
+            "p95_ms": 11.112,
+            "max_ms": 11.641
+          }
+        }
+      }
+    }
+  ],
+  "bridge_320_ft_v2_after": [
+    {
+      "mode": "shared",
+      "output": "legacy",
+      "legacy_prefix": "FT/v2",
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 200,
+            "mean_ms": 5.809,
+            "median_ms": 5.854,
+            "p95_ms": 10.661,
+            "max_ms": 11.638
+          },
+          "t50": {
+            "samples": 200,
+            "mean_ms": 5.809,
+            "median_ms": 5.854,
+            "p95_ms": 10.661,
+            "max_ms": 11.638
+          },
+          "t90": {
+            "samples": 200,
+            "mean_ms": 5.809,
+            "median_ms": 5.854,
+            "p95_ms": 10.661,
+            "max_ms": 11.638
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 200,
+            "mean_ms": 5.809,
+            "median_ms": 5.854,
+            "p95_ms": 10.661,
+            "max_ms": 11.638
+          },
+          "t50": {
+            "samples": 200,
+            "mean_ms": 5.809,
+            "median_ms": 5.854,
+            "p95_ms": 10.661,
+            "max_ms": 11.638
+          },
+          "t90": {
+            "samples": 200,
+            "mean_ms": 5.809,
+            "median_ms": 5.854,
+            "p95_ms": 10.661,
+            "max_ms": 11.638
+          }
+        }
+      }
+    }
+  ],
+  "upstream_core_320": [
+    {
+      "implementation": "current upstream VRCFT source headless Core and sandbox (not Steam UI)",
+      "commit": "e1056bb98843dd0fd1b152f24cce3b09d0d19db4",
+      "repeat": 0,
+      "module_zip_sha256": "1501bcf8ed1a8fb0b9d8e166ab1c95ab838c4e33d09524f2f537bf6f87d8c032",
+      "output": "legacy",
+      "mutator": false,
+      "mapping": "all parameters relevant; capture JawOpen and EyeOpenLeft",
+      "timer_resolution_request_ms": 1,
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 80,
+            "mean_ms": 6.384,
+            "median_ms": 6.454,
+            "p95_ms": 11.193,
+            "max_ms": 12.077
+          },
+          "t50": {
+            "samples": 80,
+            "mean_ms": 6.384,
+            "median_ms": 6.454,
+            "p95_ms": 11.193,
+            "max_ms": 12.077
+          },
+          "t90": {
+            "samples": 80,
+            "mean_ms": 6.384,
+            "median_ms": 6.454,
+            "p95_ms": 11.193,
+            "max_ms": 12.077
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 80,
+            "mean_ms": 6.384,
+            "median_ms": 6.454,
+            "p95_ms": 11.193,
+            "max_ms": 12.077
+          },
+          "t50": {
+            "samples": 80,
+            "mean_ms": 6.384,
+            "median_ms": 6.454,
+            "p95_ms": 11.193,
+            "max_ms": 12.077
+          },
+          "t90": {
+            "samples": 80,
+            "mean_ms": 6.384,
+            "median_ms": 6.454,
+            "p95_ms": 11.193,
+            "max_ms": 12.077
+          }
+        }
+      }
+    },
+    {
+      "implementation": "current upstream VRCFT source headless Core and sandbox (not Steam UI)",
+      "commit": "e1056bb98843dd0fd1b152f24cce3b09d0d19db4",
+      "repeat": 1,
+      "module_zip_sha256": "1501bcf8ed1a8fb0b9d8e166ab1c95ab838c4e33d09524f2f537bf6f87d8c032",
+      "output": "legacy",
+      "mutator": false,
+      "mapping": "all parameters relevant; capture JawOpen and EyeOpenLeft",
+      "timer_resolution_request_ms": 1,
+      "step_response": {
+        "jaw": {
+          "t10": {
+            "samples": 80,
+            "mean_ms": 6.16,
+            "median_ms": 6.448,
+            "p95_ms": 10.573,
+            "max_ms": 11.854
+          },
+          "t50": {
+            "samples": 80,
+            "mean_ms": 6.16,
+            "median_ms": 6.448,
+            "p95_ms": 10.573,
+            "max_ms": 11.854
+          },
+          "t90": {
+            "samples": 80,
+            "mean_ms": 6.16,
+            "median_ms": 6.448,
+            "p95_ms": 10.573,
+            "max_ms": 11.854
+          }
+        },
+        "eye": {
+          "t10": {
+            "samples": 80,
+            "mean_ms": 6.16,
+            "median_ms": 6.448,
+            "p95_ms": 10.573,
+            "max_ms": 11.854
+          },
+          "t50": {
+            "samples": 80,
+            "mean_ms": 6.16,
+            "median_ms": 6.448,
+            "p95_ms": 10.573,
+            "max_ms": 11.854
+          },
+          "t90": {
+            "samples": 80,
+            "mean_ms": 6.16,
+            "median_ms": 6.448,
+            "p95_ms": 10.573,
+            "max_ms": 11.854
+          }
+        }
+      }
+    }
+  ],
+  "limits": [
+    "No camera inference, headset transport, real avatar animator, WPF rendering or display measurement.",
+    "Step inputs are not a full-rate multi-channel stream saturation test.",
+    "Upstream source headless pipeline, not installed Steam UI or reporting PC.",
+    "Upstream all-relevant mapping and bridge explicit float mapping; both mutators disabled.",
+    "Earlier contended 3.1 probe excluded. Isolated exploratory 3.2 spikes documented in the companion report."
+  ]
+}

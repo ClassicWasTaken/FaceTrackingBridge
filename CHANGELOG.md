@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2 - Local preview, unreleased
+
+- Match VRCFaceTracking's Windows timer precision while a module worker is active. This reduces sleep-based input latency and jitter in older Baballonia modules without adding smoothing or changing the 90 Hz output rate.
+- Balance timer requests after module teardown, including initialization failures and cancellation. Inactive coordinators and the interface do not request higher timer precision.
+- Added real-DLL input-to-output latency measurements, separate shared/split and legacy/native coverage, and timer-lifetime regression checks. See [latency investigation](docs/BABALLONIA-LATENCY.md) for results and limits.
+
 ## 1.1.1
 
 Changes since **1.1.0**.

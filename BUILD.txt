@@ -91,9 +91,21 @@ ADDITIONAL MODULE DOWNLOAD / PROVIDER / SEND TESTS
   dotnet build tests/Fixtures/BabbleBridge.CustomModule.Fixture -c Release -o work/custom-fixture
   python tests/custom_module_integration_test.py --worker dist/BabbleFrameBridge/runtime/BabbleFrameBridge.Worker.exe --module-dll work/custom-fixture/BabbleBridge.CustomModule.Fixture.dll
   dotnet run --project tests/BabbleBridge.Sending.Tests -c Release
+  dotnet run --project tests/WorkerTiming.Tests -c Release
   python tests/provider_integration_test.py --worker dist/BabbleFrameBridge/runtime/BabbleFrameBridge.Worker.exe --babble-zip "path/to/Baballonia.zip" --virtual-desktop-zip "path/to/VirtualDesktop.VRCFaceTracking.zip" --steam-link-zip "path/to/LinkFTModule.zip"
 
 Provider tests use synthetic data with the real separately supplied DLLs. They
 skip fixed-port/shared-memory fixtures if a live provider is already using
 those resources. A hardware/VRChat session is still needed to verify a user's
 complete headset and avatar setup.
+
+MEASURE BABALLONIA INPUT LATENCY
+  python tests/baballonia_latency_test.py --worker dist/BabbleFrameBridge/runtime/BabbleFrameBridge.Worker.exe --module-zip "path/to/Baballonia.zip" --report "latency.json"
+This uses isolated ports and profile/module copies. A dedicated capture thread
+timestamps the output before decoding, and measurements begin after avatar
+binding and output warm-up. It reports 10/50/90 percent step-response timing
+for mouth and eyelids in shared/split and legacy/native configurations.
+Use --legacy-prefix FT/v2 to exercise Jerry-style prefixed float parameters.
+The default lowercase eye addresses target the current Expressions Alpha
+module; use --legacy-eye-addresses with the older 3.1 module. Camera inference,
+transport and the avatar/display are not measured.
