@@ -52,8 +52,9 @@ per-user and 64-bit installation modes consistent, and preserve the existing
 installation directory. These values identify the same application to Windows
 and Inno Setup, allowing one installed app entry to be updated over time.
 Keep the BabbleBridgeReleaseGeneration registry marker at 5 in future installers.
-Public 1.1.1 accepts the exact local-only Face Tracking Bridge 1.1.2 preview
-bearing generation 4. The installer preserves the installation, settings,
+Public 1.1.1 accepts the earlier Face Tracking Bridge 1.1.2 development preview
+bearing generation 4. Public 1.1.2 and its latency preview bear generation 5;
+they cannot use that downgrade exception. The installer preserves the installation, settings,
 module library and kitty memories while recording generation 5. No other
 product, version, generation or target can use this numbering exception.
 Same-version 1.1.1 replacements and ordinary forward updates remain supported.

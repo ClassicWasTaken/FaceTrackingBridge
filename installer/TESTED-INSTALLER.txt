@@ -2,10 +2,15 @@ FACE TRACKING BRIDGE INSTALLER VALIDATION
 
 Result: PASS
 
+Validated on Windows x64; publication review completed 2 November 2026.
+- Prior normal upgrade (1 November): public 1.1.1 generation 5 to local 1.1.2 preview generation 5, 35/35 checks passed.
+- Final replacement: local 1.1.2 preview generation 5 to corrected public 1.1.2 candidate generation 5, 35/35 checks passed.
+Both runs preserved real user data and the isolated primary/backup kitty-memory files.
+The final run explicitly verifies different application binaries replacing the same numeric version.
+
 Isolated per-user install, reinstall, upgrade, downgrade rejection and uninstall.
 The test used a separate random application identity and workspace install and shortcut folders.
-All 35 lifecycle checks passed on 1 November 2026.
-Real application payloads tested: public 1.1.1 generation 5 to local 1.1.2 generation 5.
+Real application payloads tested: earlier 1.1.2 build to corrected 1.1.2 build (explicit same-version replacement).
 Shortcut collision protection and running-application install/uninstall guards were exercised.
 SteamVR hooks used an isolated fake helper; real SteamVR registration and native APIs were excluded.
 Installed-worker mapping used the existing --all-parameters diagnostic mode.
@@ -19,7 +24,7 @@ VRChat avatar discovery was excluded to avoid interference with a running local 
 - An unrelated same-name desktop shortcut survived unchecked installation and explicitly selected reinstallation.
 - Setup rejected an update while the isolated application mutex existed, before changing version or files.
 - Upgrade refreshes the same owned SteamVR registration after replacing app files and preserves the automatic-launch choice.
-- Real app binaries upgraded from 1.1.1 to 1.1.2; installed app and worker hashes match the new payload.
+- An earlier 1.1.2 build was replaced by the corrected 1.1.2 build; installed app and worker hashes match the new payload.
 - Upgrade registers the Face Tracking Bridge name with the same application identity and installation directory.
 - The real upgrade migrates owned FaceTracking Bridge Start menu shortcuts after their new replacements exist.
 - Exact generation-2 Babble Bridge 1.0.1/1.0.2 and FaceTracking Bridge 1.0.3 migrate to 1.0.0; existing 1.0.0 reinstalls normally.
@@ -46,3 +51,8 @@ VRChat avatar discovery was excluded to avoid interference with a running local 
 - A simulated SteamVR cleanup failure is logged without blocking uninstall or discarding unrelated launch preferences.
 - The migrated desktop shortcut was created and was removed by normal uninstall.
 - Real user settings, imported modules, and module state remained byte-for-byte unchanged.
+
+RELATED APPLICATION VALIDATION
+136 kitty memory/gesture regressions passed, including empty/one-byte primary recovery followed by a successful save and preservation of original/backup bytes.
+Seven focused kitty-memory interface scenarios passed, including read-only disabled startup, restored context and identity, gestures, forget, corrupt/future/locked recovery, motion and reduced-motion behavior.
+See tests/TESTED-LATENCY.txt for tracking and worker lifecycle checks.

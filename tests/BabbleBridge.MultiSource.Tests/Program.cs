@@ -164,6 +164,48 @@ await Test("two invalid SDK modules fail before ready and cannot leave orphan wo
         Check(!Alive(int.Parse(File.ReadAllText(file))), "A failed source remained alive after coordinator startup failed.");
 });
 
+await Test("fatal modules with stuck teardown fail combined startup without leaving children", async () =>
+{
+    using var output = new OscCapture(); var profile = Profile("fatal-stuck-teardown", output.Port);
+    var eye = Fixture(profile, "eye", new()); var face = Fixture(profile, "face", new());
+    foreach (var module in new[] { eye, face })
+    {
+        var directory = Path.GetDirectoryName(module)!;
+        File.WriteAllText(Path.Combine(directory, "fixture-mode.txt"), "unsupported-sdk");
+        File.WriteAllText(Path.Combine(directory, "fixture-hang-teardown.flag"), "hang after fatal");
+    }
+    using var probe = Start(profile, eye, face);
+    await Until(() => probe.Messages.Any(message => Type(message) == "fatal"),
+        "Fatal children stuck in teardown prevented bounded combined startup failure.", 20);
+    Check(!probe.Messages.Any(message => Type(message) == "ready") && output.SourcePorts.Count == 0,
+        "Fatal inputs announced ready or emitted tracking before a valid frame.");
+    var childPids = probe.Messages.Where(message => Type(message) == "status")
+        .SelectMany(message => new[] { message.GetProperty("eyeWorkerPid").GetInt32(), message.GetProperty("faceWorkerPid").GetInt32() })
+        .Where(pid => pid > 0).Distinct().ToArray();
+    Check(childPids.Length >= 2 && Directory.GetFiles(profile, "fixture-torn-down.txt", SearchOption.AllDirectories).Length == 2,
+        "The fatal fixture did not exercise both children's stuck teardown.");
+    await probe.WaitExit();
+    Check(childPids.All(pid => !Alive(pid)), "A fatal child remained alive after bounded startup failure.");
+});
+
+await Test("a fatal source stuck in teardown cannot stop the healthy opposite source", async () =>
+{
+    using var output = new OscCapture(); var profile = Profile("partial-fatal-stuck-teardown", output.Port);
+    var eye = Fixture(profile, "eye", new()); var face = Fixture(profile, "face", new() { ["jaw"] = .71f });
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(eye)!, "fixture-mode.txt"), "unsupported-sdk");
+    File.WriteAllText(Path.Combine(Path.GetDirectoryName(eye)!, "fixture-hang-teardown.flag"), "hang after fatal");
+    using var probe = Start(profile, eye, face); await probe.WaitReady();
+    await Until(() => output.Has("/v2/JawOpen", .71f), "The failed eye source blocked healthy face output.");
+    var facePid = probe.LatestStatus().GetProperty("faceWorkerPid").GetInt32();
+    await Until(() => probe.Status(status => status.GetProperty("eyeSourceState").GetString() == "Failed"
+        && status.GetProperty("eyeWorkerPid").GetInt32() == 0 && status.GetProperty("faceAvailable").GetBoolean()
+        && status.GetProperty("faceWorkerPid").GetInt32() == facePid && Near(status.GetProperty("jawOpen").GetSingle(), .71f)),
+        "The stuck failed source did not exhaust independently while healthy tracking continued.", 20);
+    Check(Alive(facePid), "Retiring the failed source terminated its healthy sibling.");
+    await probe.Stop();
+    Check(!Alive(facePid), "The healthy child remained alive after stopping the coordinator.");
+});
+
 await Test("inputs that fail before their first valid frame cannot commit a combined startup", async () =>
 {
     using var output = new OscCapture(); var profile = Profile("bad-first-frame", output.Port);
@@ -306,7 +348,7 @@ static byte[] FloatMessage(string address, float value)
     var offset = data.Length - 8; data[offset] = (byte)','; data[offset + 1] = (byte)'f';
     BinaryPrimitives.WriteInt32BigEndian(data.AsSpan(offset + 4), BitConverter.SingleToInt32Bits(value)); return data;
 }
-static async Task Until(Func<bool> condition, string message) { var clock = Stopwatch.StartNew(); while (!condition()) { if (clock.Elapsed > TimeSpan.FromSeconds(12)) throw new TimeoutException(message); await Task.Delay(20); } }
+static async Task Until(Func<bool> condition, string message, double timeoutSeconds = 12) { var clock = Stopwatch.StartNew(); while (!condition()) { if (clock.Elapsed > TimeSpan.FromSeconds(timeoutSeconds)) throw new TimeoutException(message); await Task.Delay(20); } }
 
 sealed class Probe : IDisposable
 {

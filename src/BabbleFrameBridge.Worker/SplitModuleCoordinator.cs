@@ -271,6 +271,11 @@ internal sealed class InputWorker(ModuleInputSelection selection, string role, s
                 while (!child.HasExited && !stop.IsCancellationRequested)
                 {
                     if (stdout.IsFaulted) throw stdout.Exception!.GetBaseException();
+                    // A module may report its failure before blocking in native
+                    // teardown. Retire it through the bounded shutdown/retry path
+                    // instead of waiting forever in a non-watchdogged Failed state.
+                    if (state == "Failed")
+                        throw new InvalidOperationException(error.Length == 0 ? "The input module reported a fatal failure." : error);
                     if (state == "Ready" && Stopwatch.GetElapsedTime(Current?.Received ?? readyAt).TotalSeconds > 2.5
                         || state == "Starting" && Stopwatch.GetElapsedTime(startedAt).TotalSeconds > 35)
                         throw new TimeoutException("The input module stopped publishing tracking snapshots.");

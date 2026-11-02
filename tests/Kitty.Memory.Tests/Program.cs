@@ -78,7 +78,7 @@ Check(limited.Context is null && limited.CoreMemories!.Length == 1, "Unbounded a
 Check(store.Save(huge) && new FileInfo(store.FilePath).Length <= KittyMemoryStore.MaximumBytes, "Oversized in-memory arrays made an oversized disk save.");
 if (File.Exists(store.BackupPath)) File.Delete(store.BackupPath);
 
-foreach (var contents in new[] { "{broken", "null", "{\"Schema\":2}", new string(' ', KittyMemoryStore.MaximumBytes + 1) })
+foreach (var contents in new[] { "", "{", "{broken", "null", "{\"Schema\":2}", new string(' ', KittyMemoryStore.MaximumBytes + 1) })
 {
     File.WriteAllText(store.FilePath, contents);
     var loaded = store.Load();
@@ -115,6 +115,22 @@ Check(File.ReadAllText(recovery.FilePath) == "{broken primary" && File.ReadAllBy
     "Read-only backup recovery modified the disabled companion's files.");
 Check(recovery.Save(recovered) && File.ReadAllText(recovery.UnreadablePath) == "{broken primary"
     && File.ReadAllBytes(recovery.BackupPath).SequenceEqual(goodBackup), "Repair overwrote a last-good backup or discarded the unreadable primary.");
+foreach (var incomplete in new[] { Array.Empty<byte>(), new byte[] { (byte)'{' } })
+{
+    File.WriteAllBytes(recovery.FilePath, incomplete);
+    var incompleteRecovered = recovery.Load();
+    Check(recovery.RecoveredFromBackup && incompleteRecovered.Trust == memory.Trust,
+        "An incomplete primary could not recover the last-good memory.");
+    Check(File.ReadAllBytes(recovery.FilePath).SequenceEqual(incomplete)
+        && File.ReadAllBytes(recovery.BackupPath).SequenceEqual(goodBackup),
+        "Loading an incomplete primary modified original or recovery bytes.");
+    Check(recovery.Save(incompleteRecovered with { Trust = .93 })
+        && File.ReadAllBytes(recovery.UnreadablePath).SequenceEqual(incomplete)
+        && File.ReadAllBytes(recovery.BackupPath).SequenceEqual(goodBackup),
+        "Saving after incomplete-primary recovery failed, discarded the original, or overwrote the last-good backup.");
+    Check(recovery.Load().Trust == .93 && !recovery.RecoveredFromBackup,
+        "New memories did not persist after repairing an incomplete primary.");
+}
 const string future = "{\"Schema\":77,\"FuturePersonalBond\":\"preserve this profile\"}";
 File.WriteAllText(recovery.FilePath, future);
 Check(recovery.Load().CoreMemories is { Length: 1 } && recovery.RecoveredFromBackup, "A future schema prevented safe last-good fallback.");

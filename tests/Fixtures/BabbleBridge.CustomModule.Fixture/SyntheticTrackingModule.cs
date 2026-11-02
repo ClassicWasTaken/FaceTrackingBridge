@@ -47,7 +47,11 @@ public sealed class SyntheticTrackingModule : ExtTrackingModule, IFixtureDepende
         UnifiedTracking.Data.Shapes[(int)UnifiedExpressions.EyeWideRight].Weight = .2f;
         UnifiedTracking.Data.Shapes[(int)UnifiedExpressions.BrowInnerUpLeft].Weight = Value("brow", 0);
     }
-    public override void Teardown() => File.WriteAllText("fixture-torn-down.txt", "stopped");
+    public override void Teardown()
+    {
+        File.WriteAllText("fixture-torn-down.txt", "stopped");
+        if (File.Exists("fixture-hang-teardown.flag")) Thread.Sleep(Timeout.Infinite);
+    }
     // This is deliberately unrelated to the SDK: generic hosting must not probe it.
     private bool RestartNeeded(int unused) => false;
     [DllImport("BabbleBridge_Test_Missing_Native_Dependency_1023")]

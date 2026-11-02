@@ -395,7 +395,7 @@ begin
       HasReleaseGeneration := RegQueryDWordValue(HKCU,
         'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#BuildIdentity}_is1',
         'BabbleBridgeReleaseGeneration', ReleaseGeneration);
-      { The local-only 1.1.2 preview is published as public 1.1.1. Only this
+      { The earlier generation-4 1.1.2 development preview became public 1.1.1. Only this
         exact product/version/generation can cross that numbering boundary.
         Recording generation 5 retires the exception for future builds. }
       if ('{#AppVersion}' = '1.1.1') and HasReleaseGeneration and

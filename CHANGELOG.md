@@ -1,10 +1,16 @@
 # Changelog
 
-## 1.1.2 - Local preview, unreleased
+## 1.1.2
+
+Changes since **1.1.1**.
 
 - Match VRCFaceTracking's Windows timer precision while a module worker is active. This reduces sleep-based input latency and jitter in older Baballonia modules without adding smoothing or changing the 90 Hz output rate.
 - Balance timer requests after module teardown, including initialization failures and cancellation. Inactive coordinators and the interface do not request higher timer precision.
+- Fixed a module that reports a fatal error and then hangs during shutdown leaving combined startup stuck. The failed source now uses bounded cleanup and retries while a healthy companion source continues.
+- Fixed empty or one-byte kitty saves recovering from backup but preventing new memories from being saved. Incomplete originals and valid backups are preserved before repair.
 - Added real-DLL input-to-output latency measurements, separate shared/split and legacy/native coverage, and timer-lifetime regression checks. See [latency investigation](docs/BABALLONIA-LATENCY.md) for results and limits.
+
+[Download the Windows installer](https://github.com/ClassicWasTaken/FaceTrackingBridge/releases/download/v1.1.2/FaceTracking-Bridge-Setup.exe)
 
 ## 1.1.1
 

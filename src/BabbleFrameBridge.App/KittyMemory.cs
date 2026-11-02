@@ -193,10 +193,10 @@ public sealed class KittyMemoryStore
                 throw new IOException("Kitty memory paths cannot be filesystem links.");
     }
 
-    private static byte[] ReadBounded(string path)
+    private static byte[] ReadBounded(string path, int minimumLength = 2)
     {
         using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        if (input.Length is < 2 or > MaximumBytes) throw new InvalidDataException("The kitty save exceeds its size limit.");
+        if (input.Length < minimumLength || input.Length > MaximumBytes) throw new InvalidDataException("The kitty save exceeds its size limit.");
         var bytes = new byte[(int)input.Length]; input.ReadExactly(bytes); return bytes;
     }
 
@@ -208,7 +208,9 @@ public sealed class KittyMemoryStore
         if (!File.Exists(FilePath)) return;
         // A damaged/future profile is kept verbatim before replacing it. An
         // oversized unknown file is left untouched and saving fails safely.
-        var previous = ReadBounded(FilePath);
+        // Preserve incomplete 0/1-byte writes too: they are invalid to load,
+        // but must not prevent a recovered backup from saving new memories.
+        var previous = ReadBounded(FilePath, minimumLength: 0);
         var destination = BackupPath;
         try { _ = Decode(previous, now); }
         catch (Exception error) when (IsStorageError(error)) { destination = UnreadablePath; }

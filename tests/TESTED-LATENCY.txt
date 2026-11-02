@@ -1,5 +1,8 @@
-FACE TRACKING BRIDGE 1.1.2 LOCAL PREVIEW - MODULE TIMING VALIDATION
-Validated on Windows x64, 1 November 2026. Not published to GitHub.
+FACE TRACKING BRIDGE 1.1.2 - MODULE TIMING VALIDATION
+Initial timing validation: Windows x64, 1 November 2026.
+Prepublication bug review and recovery regressions: 2 November 2026.
+The timing fix was validated in the local 1.1.2 preview before preparation
+of the public 1.1.2 release.
 
 - 27 timer-lifetime checks pass. Injected native API seams cover exactly one
   matching begin/end request, repeated and concurrent lifetime calls, unused
@@ -11,9 +14,17 @@ Validated on Windows x64, 1 November 2026. Not published to GitHub.
   complete packet batching, cancellation and local-only mDNS discovery.
   The observed cadence sample measured 88.8 Hz with p95 interval 11.56 ms;
   the requested output rate remains 90 Hz.
-- 14 simultaneous-source checks pass: role ownership, partial/offline sources,
+- 16 simultaneous-source checks pass: role ownership, partial/offline sources,
   stale neutralization, child crash recovery, same-module collapse, invalid
   startup, input conflicts, orphan cleanup and bounded input-only snapshots.
+  The two new fatal-error/hanging-teardown regressions fail against the old
+  worker and pass with bounded cleanup/retry; healthy sibling tracking continues.
+- 136 kitty memory checks pass, including empty/one-byte primary saves that
+  recover a valid backup and then persist new interactions without overwriting
+  their recovery copy. The new save-after-recovery regression fails before the fix.
+- Seven focused real-window kitty-memory checks pass after the recovery fix,
+  covering loaded context, interactions, Forget, corrupt/locked data, backup
+  recovery, learned motion and reduced-motion/tray pause behavior.
 - Five official-provider scenarios pass without skips: BFR negotiation and
   restart, Baballonia desktop, Expressions Alpha module 3.2, Steam Link,
   and Virtual Desktop waiting/automatic connection with synthetic IPC.
@@ -21,15 +32,19 @@ Validated on Windows x64, 1 November 2026. Not published to GitHub.
   pass, including byte order, pupils, eyelids, eye widen, concurrent packet
   safety and native/legacy avatar-capability transitions.
 - 35 isolated installer lifecycle checks pass when upgrading the actual public
-  1.1.1 generation-5 payload to this local 1.1.2 preview. Settings, imported
+  1.1.1 generation-5 payload to the 1.1.2 candidate. Settings, imported
   modules and both kitty-memory files remain unchanged. Installation identity,
   install directory, running-app guards, rejected downgrades and normal
   uninstall behavior are preserved; production AppId and SteamVR are excluded.
+- A further 35 installer lifecycle checks pass for replacing the actual local
+  1.1.2 latency preview with the corrected public 1.1.2 candidate. The same-version
+  replacement preserves application identity, settings, modules and kitty saves.
 
 All runtime checks use isolated profiles, temporary module copies and loopback
 capture or owned synthetic IPC. Real user settings, avatar caches and live
-VRChat/SteamVR registration are not modified. The model, companion behavior
-and interface rendering were unchanged and their suites were not repeated.
+VRChat/SteamVR registration are not modified. The trained model and interface
+rendering code are unchanged; full release CI additionally covers
+their existing suites. New memory recovery was also checked through its store.
 
 The input-to-output investigation, original module receipts, comparison scope,
 measurements and limitations are recorded in docs/BABALLONIA-LATENCY.md.
